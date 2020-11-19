@@ -16,12 +16,18 @@
 
 package com.example.android.camera2.basic
 
+import android.content.pm.PackageManager
+import android.graphics.Bitmap
 import android.os.Bundle
 import android.view.View
 import android.widget.FrameLayout
 import androidx.appcompat.app.AppCompatActivity
 
 class CameraActivity : AppCompatActivity() {
+
+    var PACKAGE_NAME = applicationContext.packageName
+    var PACKAGE_MANAGER: PackageManager? = applicationContext.packageManager
+
 
     private lateinit var container: FrameLayout
 
