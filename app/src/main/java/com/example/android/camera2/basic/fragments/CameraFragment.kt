@@ -18,7 +18,9 @@ package com.example.android.camera2.basic.fragments
 
 import android.annotation.SuppressLint
 import android.content.Context
-import android.graphics.*
+import android.graphics.Bitmap
+import android.graphics.Color
+import android.graphics.ImageFormat
 import android.hardware.camera2.*
 import android.media.Image
 import android.media.ImageReader
@@ -42,6 +44,8 @@ import com.example.android.camera.utils.computeExifOrientation
 import com.example.android.camera.utils.getPreviewOutputSize
 import com.example.android.camera2.basic.CameraActivity
 import com.example.android.camera2.basic.R
+import com.example.android.camera2.basic.classificationInterface.CloudVision
+import com.google.protobuf.ByteString
 import kotlinx.android.synthetic.main.fragment_camera.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -50,6 +54,7 @@ import java.io.Closeable
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
+import java.nio.ByteBuffer
 import java.text.SimpleDateFormat
 import java.util.*
 import java.util.concurrent.ArrayBlockingQueue
@@ -57,6 +62,7 @@ import java.util.concurrent.TimeoutException
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 import kotlin.coroutines.suspendCoroutine
+
 
 class CameraFragment : Fragment() {
 
@@ -214,7 +220,8 @@ class CameraFragment : Fragment() {
                     // TODO take Result and send to google api TODO
                     // TODO result (CombinedCaptureResult) to Bitmap function
                     // Save the result to disk
-
+                    var visionResponse : CloudVision = CloudVision(CameraActivity(), convertToGoogleImage(result.image), mode = "LABEL_DETECTION")
+                    //TODO visualize visionResponse in TextView then let it speak
                     val output = saveResult(result)
                     Log.d(TAG, "Image saved: ${output.absolutePath}")
 
@@ -474,10 +481,14 @@ class CameraFragment : Fragment() {
 
 
 
-    private fun decodeBitmap(file: File): Bitmap? {
+    private fun convertToGoogleImage(image: android.media.Image):
+            com.google.api.services.vision.v1.model.Image {
         //TODO fix this
         ///val source: ImageDecoder.Source = ImageDecoder.createSource(file)
-
-        return null!!
+        var buffer: ByteBuffer = image.getPlanes()[0].getBuffer()
+        val imgBytes: ByteString = ByteString.copyFrom(buffer)
+        val img: com.google.cloud.vision.v1.Image = com.google.cloud.vision.v1.Image.newBuilder().setContent(imgBytes).build()
+        val newImage =  img as com.google.api.services.vision.v1.model.Image
+        return newImage
     }
 }

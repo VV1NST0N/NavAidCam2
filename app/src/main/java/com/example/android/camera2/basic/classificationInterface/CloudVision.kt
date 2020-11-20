@@ -1,6 +1,5 @@
 package com.example.android.camera2.basic.classificationInterface
 
-import android.graphics.Bitmap
 import android.os.AsyncTask
 import android.util.Log
 import com.example.android.camera2.basic.CameraActivity
@@ -11,14 +10,13 @@ import com.google.api.client.json.JsonFactory
 import com.google.api.client.json.gson.GsonFactory
 import com.google.api.services.vision.v1.Vision
 import com.google.api.services.vision.v1.model.*
-import java.io.ByteArrayOutputStream
 import java.io.IOException
 
 
-class CloudVision(main: CameraActivity, bitmap: Bitmap, mode: String) : AsyncTask<Object, Void, String>() {
+class CloudVision(main: CameraActivity, image: Image, mode: String) : AsyncTask<Object, Void, String>() {
     private var main: CameraActivity? = null
     private var CLOUD_VISION_API_KEY = ""
-    private var bitmap: Bitmap? = null
+    private var image: Image? = null
     private var mode: String? = null
 
 
@@ -27,7 +25,7 @@ class CloudVision(main: CameraActivity, bitmap: Bitmap, mode: String) : AsyncTas
 
     init {
         this.main = main
-        this.bitmap = bitmap
+        this.image = image
         this.mode = mode
     }
 
@@ -90,19 +88,19 @@ class CloudVision(main: CameraActivity, bitmap: Bitmap, mode: String) : AsyncTas
 
     fun addImageRequest(): AnnotateImageRequest {
         var request: AnnotateImageRequest = AnnotateImageRequest()
-        var base64EncodedImage: Image = Image()
+        /*var base64EncodedImage: Image = Image()
         var byteArrayOutputStream = ByteArrayOutputStream()
         bitmap?.compress(Bitmap.CompressFormat.JPEG, 90, byteArrayOutputStream)
         val imageBytes = byteArrayOutputStream.toByteArray()
         // Base64 encode the JPEG
-        base64EncodedImage.encodeContent(imageBytes)
-        request.setImage(base64EncodedImage)
+        base64EncodedImage.encodeContent(imageBytes)*/
+        request.image = image
         // adding Features
         // TODO experiment
-        var feat = Feature()
-        feat.type = mode
-        feat.maxResults = 2
-        request.setFeatures(listOf(feat))
+        var feature = Feature()
+        feature.type = mode
+        feature.maxResults = 2
+        request.features = listOf(feature)
         return request
     }
 
