@@ -31,10 +31,10 @@ import androidx.lifecycle.lifecycleScope
 import androidx.navigation.fragment.navArgs
 import androidx.viewpager2.widget.ViewPager2
 import com.bumptech.glide.Glide
-import com.example.android.camera.utils.GenericListAdapter
-import com.example.android.camera.utils.decodeExifOrientation
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import com.example.android.camera2.basic.utils.GenericListAdapter
+import com.example.android.camera2.basic.utils.decodeExifOrientation
 import java.io.BufferedInputStream
 import java.io.File
 import kotlin.math.max

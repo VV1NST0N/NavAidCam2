@@ -9,13 +9,14 @@ import com.google.api.client.http.HttpTransport
 import com.google.api.client.json.JsonFactory
 import com.google.api.client.json.gson.GsonFactory
 import com.google.api.services.vision.v1.Vision
+import com.google.api.services.vision.v1.VisionRequestInitializer
 import com.google.api.services.vision.v1.model.*
 import java.io.IOException
 
 
 class CloudVision(main: CameraActivity, image: Image, mode: String) : AsyncTask<Object, Void, String>() {
     private var main: CameraActivity? = null
-    private var CLOUD_VISION_API_KEY = ""
+    private var CLOUD_VISION_API_KEY = "MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQDDhSGNBv7BdZe1\\ncwiAAQ6t5xToCdwBCtLu1y7As/rP+wa+qQl37J8SrAL5l8kmj/7XpGh1bcRjp9uA\\nDyiCqFImVTtGqenm+qOy+TQaZNYkskSvA3yVW2HMoOhXItka4C5nrPSdyQTM2OGw\\npjbvsyrKMv9kUh4Bx5yPVgevvr7OTFC8V1P5yT6UQ543eLRlWkvjfL1YYGDNbgVf\\n4dzEqY8KRDQw6LIL2r0paliKP7TQV85PF70wlNgRDZTnV87jeMPZjbcZBRLE535I\\nPlHyKiEAlYMMai6WRw/6xq4VUG/dEE+LWCFYY69bER/qAAVTX6LHfWZdwJ29EGpu\\nkXDk5vsVAgMBAAECggEAGwQIvENUrSeR9FT2PjWnMRlGdr9yAkTcG3tpLuBPjjBZ\\n4LtbnxH3cu2IpbM27Jil9mb1thAaPEjj2ACAMPmQDFLnk16D/tHwD5lGfUUkn8Jw\\nIhyhuMN9MnijUfLzO7bxQosP68NsYd+v46g73AgOKA0+475C/iz2MYoKGtsI41lD\\nVIxp+zQoxxfsxwShdVMUSmHlDWXJ0GpjO4ayE5PfC9y/Jfh2vXJmt+RNtNPhbDN0\\n7+YnvPbFj2zeSLMazNDNhU8KJ7jkVK0y5zeMhhKvuyZKWaGuY1opZa1aOI0ao5rt\\nO1CA8xvBDSOb/d23WxwvFch67jKZP8s2yVZFnI0vywKBgQDhNdgsy4Zsk6axKDYw\\nQ7mlcR+ZAr8raq/AdcdBHJIVP5RzY6M+XIqfNKWcFL5x+r4DmXABMbfx1QyI36Mg\\nIX4+Ojwz09kMrDGNxncTWMuQJpLOSbmNvq9Gm+Tr/7bZ8YmZibjqGsLYP4qKZbv3\\n4z7h5mt0QFwz5MwqtQlwaTwlWwKBgQDeQCdcAAVySWq8b8bOiiB/nmrlrf4R4wb9\\naFw79F2uWnljsCZgiMp6wjTv/eCjKZg7qrnofUW9Bm8q1BZ0cFFF/07QYjfada0W\\ns8Z9EpXwObfq4saQui0sRzZ1UdH6p5dd3hDMMVpxc4ML7T2zF3Ul+VovGkDhIjGo\\nt+6uLfycTwKBgQCJNv9BO7fpS4TSh4eMnJbt4CC6X1wOne/7OUdvunKfE5/lNh3u\\nDwA+xBrrIBBw7a78Dm6Zq6tBYudCNc/z8bQzQdQQV9D00a1XjkZauU09xOLJYU32\\nuOmeAbnWuHS2EV4e+DR8HlX836oPbLC79e8IQBXUPKpwy8RBeRAJN3T35QKBgHSP\\nStUqQbD9phfru2Vo9cBYkhGhHeW9nlXanLzo3RTq6E0K/iWUuDSHlAHlsSGBWBC6\\n6kNvJ9sJ+9WHY7tviIBgdLI/QLG3E68bW9cOn0pcywNKKf+PVM+rDXmcDrcZm/4j\\nz8V3gMqNXUYtBzXc8JiY3N5lM2+fYlHtHSWGgrxrAoGAYl8eQxBJaNAhvGeAgSip\\nUCZrp/a5CzaWv+XWqySKPQrmY8qXaLK2u69j8K1tZSkjAx3CbfkMdQ66wROkAK/o\\n1C0x8YYzFotnkTqqFkKEXP0nxZ9KCkwTGlUxb6Wu9DxyzFWg2/Pr1zTUj1OFJcm+\\n6Vu87JtvQBVkvGloc4MK2V0="
     private var image: Image? = null
     private var mode: String? = null
 
@@ -27,21 +28,52 @@ class CloudVision(main: CameraActivity, image: Image, mode: String) : AsyncTask<
         this.main = main
         this.image = image
         this.mode = mode
+        Log.d("starting process: ", "Init")
     }
 
-    override fun doInBackground(vararg p0: Object?): String? {
+    fun performAnalyze(): String? {
         try {
-            Log.i("starting process: ", " Cloud Vision Access")
+            Log.d("starting process: ", " Cloud Vision Access")
             var httpTransport: HttpTransport = AndroidHttp.newCompatibleTransport()
             var jsonFactory: JsonFactory = GsonFactory.getDefaultInstance()
 
             var builder: Vision.Builder = Vision.Builder(httpTransport, jsonFactory, null)
-            var requestInitializer = InitializerFactory.getInitializer(CLOUD_VISION_API_KEY, main)
+            var requestInitializer = VisionRequestInitializer(CLOUD_VISION_API_KEY) // TODO repair later InitializerFactory.getInitializer(CLOUD_VISION_API_KEY, main)
             builder.setVisionRequestInitializer(requestInitializer)
             var vision: Vision = builder.build()
             var batchAnnotateImagesRequest = BatchAnnotateImagesRequest()
             batchAnnotateImagesRequest.setRequests(listOf(addImageRequest()))
+            Log.d( "Cloudvision", "we reach this here?")
+            try{
+                var annotateRequest : Vision.Images.Annotate = vision.images().annotate(batchAnnotateImagesRequest)
 
+                // Due to a bug: requests to Vision API containing large images fail when GZipped.
+                annotateRequest.disableGZipContent = true
+                val response : BatchAnnotateImagesResponse = annotateRequest.execute()
+                return  convertResponseToString(response)
+            }catch ( e: IOException) {
+                Log.d("CloudVision", "failed to make API request because of other IOException " +
+                        e.message);
+            }
+        } catch (e: Exception) {
+            Log.e("cloud acces ERROR", e.toString())
+        }
+        return null!!
+    }
+
+    override fun doInBackground(vararg p0: Object?): String? {
+        try {
+            Log.d("starting process: ", " Cloud Vision Access")
+            var httpTransport: HttpTransport = AndroidHttp.newCompatibleTransport()
+            var jsonFactory: JsonFactory = GsonFactory.getDefaultInstance()
+
+            var builder: Vision.Builder = Vision.Builder(httpTransport, jsonFactory, null)
+            var requestInitializer = VisionRequestInitializer(CLOUD_VISION_API_KEY) // TODO repair later InitializerFactory.getInitializer(CLOUD_VISION_API_KEY, main)
+            builder.setVisionRequestInitializer(requestInitializer)
+            var vision: Vision = builder.build()
+            var batchAnnotateImagesRequest = BatchAnnotateImagesRequest()
+            batchAnnotateImagesRequest.setRequests(listOf(addImageRequest()))
+            Log.d( "Cloudvision", "we reach this here?")
             try{
                 var annotateRequest : Vision.Images.Annotate = vision.images().annotate(batchAnnotateImagesRequest)
 

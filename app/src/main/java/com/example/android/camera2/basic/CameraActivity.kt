@@ -25,8 +25,8 @@ import androidx.appcompat.app.AppCompatActivity
 
 class CameraActivity : AppCompatActivity() {
 
-    var PACKAGE_NAME = applicationContext.packageName
-    var PACKAGE_MANAGER: PackageManager? = applicationContext.packageManager
+//    var PACKAGE_NAME = applicationContext.packageName
+  //  var PACKAGE_MANAGER: PackageManager? = applicationContext.packageManager
 
 
     private lateinit var container: FrameLayout

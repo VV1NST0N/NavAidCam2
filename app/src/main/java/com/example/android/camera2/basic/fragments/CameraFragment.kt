@@ -18,7 +18,6 @@ package com.example.android.camera2.basic.fragments
 
 import android.annotation.SuppressLint
 import android.content.Context
-import android.graphics.Bitmap
 import android.graphics.Color
 import android.graphics.ImageFormat
 import android.hardware.camera2.*
@@ -38,14 +37,13 @@ import androidx.lifecycle.lifecycleScope
 import androidx.navigation.NavController
 import androidx.navigation.Navigation
 import androidx.navigation.fragment.navArgs
-import com.example.android.camera.utils.AutoFitSurfaceView
-import com.example.android.camera.utils.OrientationLiveData
-import com.example.android.camera.utils.computeExifOrientation
-import com.example.android.camera.utils.getPreviewOutputSize
 import com.example.android.camera2.basic.CameraActivity
 import com.example.android.camera2.basic.R
-import com.example.android.camera2.basic.classificationInterface.CloudVision
-import com.google.protobuf.ByteString
+import com.example.android.camera2.basic.classificationInterface.CloudVisionTest
+import com.example.android.camera2.basic.utils.AutoFitSurfaceView
+import com.example.android.camera2.basic.utils.OrientationLiveData
+import com.example.android.camera2.basic.utils.computeExifOrientation
+import com.example.android.camera2.basic.utils.getPreviewOutputSize
 import kotlinx.android.synthetic.main.fragment_camera.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -54,7 +52,6 @@ import java.io.Closeable
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
-import java.nio.ByteBuffer
 import java.text.SimpleDateFormat
 import java.util.*
 import java.util.concurrent.ArrayBlockingQueue
@@ -220,7 +217,11 @@ class CameraFragment : Fragment() {
                     // TODO take Result and send to google api TODO
                     // TODO result (CombinedCaptureResult) to Bitmap function
                     // Save the result to disk
-                    var visionResponse : CloudVision = CloudVision(CameraActivity(), convertToGoogleImage(result.image), mode = "LABEL_DETECTION")
+                    Log.d(TAG, "Bevore Shot!")
+                    var img = convertToGoogleImage(result.image)
+                    var cloudVision : CloudVisionTest = CloudVisionTest(img, mode = "LABEL_DETECTION")
+                    var visionResponse = cloudVision.performAnalyze()
+                    Log.d(TAG, "Response: $visionResponse")
                     //TODO visualize visionResponse in TextView then let it speak
                     val output = saveResult(result)
                     Log.d(TAG, "Image saved: ${output.absolutePath}")
@@ -479,16 +480,12 @@ class CameraFragment : Fragment() {
         }
     }
 
-
-
-    private fun convertToGoogleImage(image: android.media.Image):
-            com.google.api.services.vision.v1.model.Image {
+    fun convertToGoogleImage(image: Image): com.google.api.services.vision.v1.model.Image {
         //TODO fix this
         ///val source: ImageDecoder.Source = ImageDecoder.createSource(file)
-        var buffer: ByteBuffer = image.getPlanes()[0].getBuffer()
-        val imgBytes: ByteString = ByteString.copyFrom(buffer)
-        val img: com.google.cloud.vision.v1.Image = com.google.cloud.vision.v1.Image.newBuilder().setContent(imgBytes).build()
-        val newImage =  img as com.google.api.services.vision.v1.model.Image
-        return newImage
+        val buffer = image.planes[0].buffer
+        val bytes = ByteArray(buffer.remaining())
+        val imageClass = com.google.api.services.vision.v1.model.Image()
+        return imageClass.encodeContent(bytes)
     }
 }
