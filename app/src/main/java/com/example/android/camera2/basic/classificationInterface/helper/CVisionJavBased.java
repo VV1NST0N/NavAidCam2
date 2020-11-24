@@ -1,7 +1,6 @@
 package com.example.android.camera2.basic.classificationInterface.helper;
 
 import android.util.Log;
-
 import com.google.cloud.vision.v1.AnnotateImageRequest;
 import com.google.cloud.vision.v1.AnnotateImageResponse;
 import com.google.cloud.vision.v1.BatchAnnotateImagesResponse;

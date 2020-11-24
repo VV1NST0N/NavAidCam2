@@ -16,11 +16,19 @@
 
 package com.example.android.camera2.basic
 
+import android.app.Activity
 import android.content.Context
 import android.content.pm.PackageManager
+import android.hardware.camera2.CameraAccessException
+import android.hardware.camera2.CameraCharacteristics
+import android.hardware.camera2.CameraManager
+import android.os.Build
 import android.os.Bundle
+import android.util.SparseIntArray
+import android.view.Surface
 import android.view.View
 import android.widget.FrameLayout
+import androidx.annotation.RequiresApi
 import androidx.appcompat.app.AppCompatActivity
 
 class CameraActivity : AppCompatActivity() {
@@ -68,4 +76,6 @@ class CameraActivity : AppCompatActivity() {
         }
         private const val IMMERSIVE_FLAG_TIMEOUT = 500L
     }
+
+
 }

@@ -17,7 +17,9 @@
 package com.example.android.camera2.basic.fragments
 
 import android.annotation.SuppressLint
+import android.app.Activity
 import android.content.Context
+import android.content.Context.CAMERA_SERVICE
 import android.graphics.Color
 import android.graphics.ImageFormat
 import android.hardware.camera2.*
@@ -28,7 +30,10 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.HandlerThread
 import android.util.Log
+import android.util.SparseIntArray
 import android.view.*
+import androidx.annotation.RequiresApi
+import androidx.camera.core.ImageProxy
 import androidx.core.graphics.drawable.toDrawable
 import androidx.exifinterface.media.ExifInterface
 import androidx.fragment.app.Fragment
@@ -39,7 +44,7 @@ import androidx.navigation.Navigation
 import androidx.navigation.fragment.navArgs
 import com.example.android.camera2.basic.CameraActivity
 import com.example.android.camera2.basic.R
-import com.example.android.camera2.basic.classificationInterface.CloudVisionTest
+import com.example.android.camera2.basic.classificationInterface.MlKitClassifier
 import com.example.android.camera2.basic.classificationInterface.helper.CVisionJavBased
 import com.example.android.camera2.basic.utils.AutoFitSurfaceView
 import com.example.android.camera2.basic.utils.OrientationLiveData
@@ -64,6 +69,7 @@ import kotlin.coroutines.suspendCoroutine
 
 
 class CameraFragment : Fragment() {
+
 
     /** AndroidX navigation arguments */
     private val args: CameraFragmentArgs by navArgs()
@@ -169,8 +175,8 @@ class CameraFragment : Fragment() {
 
         // Used to rotate the output media to match device orientation
         relativeOrientation = OrientationLiveData(requireContext(), characteristics).apply {
-            observe(viewLifecycleOwner, Observer {
-                orientation -> Log.d(TAG, "Orientation changed: $orientation")
+            observe(viewLifecycleOwner, Observer { orientation ->
+                Log.d(TAG, "Orientation changed: $orientation")
             })
         }
     }
@@ -221,10 +227,14 @@ class CameraFragment : Fragment() {
                     // Save the result to disk
                     Log.d(TAG, "Bevore Shot!")
                     var img = convertToGoogleImageV2(result.image)
-                   // var cloudVision : CloudVisionTest = CloudVisionTest(img, mode = "LABEL_DETECTION")
-                    //var visionResponse = cloudVision.performAnalyze()
-                    var cvis : CVisionJavBased = CVisionJavBased()
-                    var visionResponse =  cvis.getAnalzedResponse(img)
+                    // var img2 = convertToGoogleImage(result.image)
+                    // var cloudVision : CloudVisionTest = CloudVisionTest(img2, mode = "LABEL_DETECTION")
+                    // var visionResponse2 = cloudVision.performAnalyze()
+                    var mlKitClassifier: MlKitClassifier = MlKitClassifier()
+
+                    mlKitClassifier.analyze(result.image, relativeOrientation.value as Int)
+                    var cvis: CVisionJavBased = CVisionJavBased()
+                    var visionResponse = cvis.getAnalzedResponse(img)
                     Log.d(TAG, "Response: $visionResponse")
                     //TODO visualize visionResponse in TextView then let it speak
                     val output = saveResult(result)
@@ -272,7 +282,7 @@ class CameraFragment : Fragment() {
             }
 
             override fun onError(device: CameraDevice, error: Int) {
-                val msg = when(error) {
+                val msg = when (error) {
                     ERROR_CAMERA_DEVICE -> "Fatal (device)"
                     ERROR_CAMERA_DISABLED -> "Device policy"
                     ERROR_CAMERA_IN_USE -> "Camera in use"
@@ -299,7 +309,7 @@ class CameraFragment : Fragment() {
 
         // Create a capture session using the predefined targets; this also involves defining the
         // session state callback to be notified of when the session is ready
-        device.createCaptureSession(targets, object: CameraCaptureSession.StateCallback() {
+        device.createCaptureSession(targets, object : CameraCaptureSession.StateCallback() {
 
             override fun onConfigured(session: CameraCaptureSession) = cont.resume(session)
 
@@ -321,7 +331,8 @@ class CameraFragment : Fragment() {
 
         // Flush any images left in the image reader
         @Suppress("ControlFlowWithEmptyBody")
-        while (imageReader.acquireNextImage() != null) {}
+        while (imageReader.acquireNextImage() != null) {
+        }
 
         // Start a new image queue
         val imageQueue = ArrayBlockingQueue<Image>(IMAGE_BUFFER_SIZE)
@@ -371,7 +382,7 @@ class CameraFragment : Fragment() {
                         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q &&
                                 image.format != ImageFormat.DEPTH_JPEG &&
                                 image.timestamp != resultTimestamp) continue
-                         Log.d(TAG, "Matching image dequeued: ${image.timestamp}")
+                        Log.d(TAG, "Matching image dequeued: ${image.timestamp}")
 
                         // Unset the image reader listener
                         imageReaderHandler.removeCallbacks(timeoutRunnable)
@@ -496,7 +507,7 @@ class CameraFragment : Fragment() {
     fun convertToGoogleImageV2(image: Image): ByteString {
         val buffer = image.planes[0].buffer
         val bytes = ByteArray(buffer.remaining())
-        var imageGoogle : ByteString =  ByteString.copyFrom(bytes)
+        var imageGoogle: ByteString = ByteString.copyFrom(bytes)
         return imageGoogle
     }
 }
