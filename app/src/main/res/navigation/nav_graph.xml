@@ -60,38 +60,6 @@
             app:argType="integer"
             app:nullable="false"/>
 
-        <action
-            android:id="@+id/action_camera_to_permissions"
-            app:destination="@id/permissions_fragment"
-            app:popUpTo="@id/camera_fragment"
-            app:popUpToInclusive="true"/>
-
-        <action
-            android:id="@+id/action_camera_to_jpeg_viewer"
-            app:launchSingleTop="true"
-            app:destination="@id/image_viewer_fragment" />
-
-    </fragment>
-
-    <fragment
-        android:id="@+id/image_viewer_fragment"
-        android:name="com.example.android.camera2.basic.fragments.ImageViewerFragment"
-        android:label="Image Viewer" >
-
-        <argument
-            android:name="file_path"
-            app:argType="string"
-            app:nullable="false"/>
-
-        <argument
-            android:name="orientation"
-            app:argType="integer"
-            android:defaultValue="0" />
-
-        <argument
-            android:name="depth"
-            app:argType="boolean"
-            android:defaultValue="false" />
     </fragment>
 
 </navigation>

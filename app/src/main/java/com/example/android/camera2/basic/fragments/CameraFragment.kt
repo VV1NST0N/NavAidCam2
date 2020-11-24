@@ -17,9 +17,7 @@
 package com.example.android.camera2.basic.fragments
 
 import android.annotation.SuppressLint
-import android.app.Activity
 import android.content.Context
-import android.content.Context.CAMERA_SERVICE
 import android.graphics.Color
 import android.graphics.ImageFormat
 import android.hardware.camera2.*
@@ -30,12 +28,9 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.HandlerThread
 import android.util.Log
-import android.util.SparseIntArray
 import android.view.*
-import androidx.annotation.RequiresApi
-import androidx.camera.core.ImageProxy
+import android.widget.TextView
 import androidx.core.graphics.drawable.toDrawable
-import androidx.exifinterface.media.ExifInterface
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.Observer
 import androidx.lifecycle.lifecycleScope
@@ -45,7 +40,6 @@ import androidx.navigation.fragment.navArgs
 import com.example.android.camera2.basic.CameraActivity
 import com.example.android.camera2.basic.R
 import com.example.android.camera2.basic.classificationInterface.MlKitClassifier
-import com.example.android.camera2.basic.classificationInterface.helper.CVisionJavBased
 import com.example.android.camera2.basic.utils.AutoFitSurfaceView
 import com.example.android.camera2.basic.utils.OrientationLiveData
 import com.example.android.camera2.basic.utils.computeExifOrientation
@@ -59,6 +53,7 @@ import java.io.Closeable
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
+import java.lang.Thread.sleep
 import java.text.SimpleDateFormat
 import java.util.*
 import java.util.concurrent.ArrayBlockingQueue
@@ -74,10 +69,12 @@ class CameraFragment : Fragment() {
     /** AndroidX navigation arguments */
     private val args: CameraFragmentArgs by navArgs()
 
+
     /** Host's navigation controller */
     private val navController: NavController by lazy {
         Navigation.findNavController(requireActivity(), R.id.fragment_container)
     }
+    var resultsList: MutableList<String> = mutableListOf<String>()
 
     /** Detects, characterizes, and connects to a CameraDevice (used for all camera operations) */
     private val cameraManager: CameraManager by lazy {
@@ -121,6 +118,8 @@ class CameraFragment : Fragment() {
     /** Where the camera preview is displayed */
     private lateinit var viewFinder: AutoFitSurfaceView
 
+    private lateinit var textView: TextView
+
     /** Overlay on top of the camera preview */
     private lateinit var overlay: View
 
@@ -144,6 +143,9 @@ class CameraFragment : Fragment() {
         super.onViewCreated(view, savedInstanceState)
         overlay = view.findViewById(R.id.overlay)
         viewFinder = view.findViewById(R.id.view_finder)
+        textView = view.findViewById(R.id.lable_view)
+        textView.text = "Test the result text by writing some Stuff now \n  more text"
+
         capture_button.setOnApplyWindowInsetsListener { v, insets ->
             v.translationX = (-insets.systemWindowInsetRight).toFloat()
             v.translationY = (-insets.systemWindowInsetBottom).toFloat()
@@ -219,6 +221,7 @@ class CameraFragment : Fragment() {
             it.isEnabled = false
 
             // Perform I/O heavy operations in a different scope
+
             lifecycleScope.launch(Dispatchers.IO) {
                 takePhoto().use { result ->
                     Log.d(TAG, "Result received: $result")
@@ -230,39 +233,38 @@ class CameraFragment : Fragment() {
                     // var img2 = convertToGoogleImage(result.image)
                     // var cloudVision : CloudVisionTest = CloudVisionTest(img2, mode = "LABEL_DETECTION")
                     // var visionResponse2 = cloudVision.performAnalyze()
-                    var mlKitClassifier: MlKitClassifier = MlKitClassifier()
+                    var mlKitClassifier = MlKitClassifier()
 
-                    mlKitClassifier.analyze(result.image, relativeOrientation.value as Int)
-                    var cvis: CVisionJavBased = CVisionJavBased()
-                    var visionResponse = cvis.getAnalzedResponse(img)
-                    Log.d(TAG, "Response: $visionResponse")
-                    //TODO visualize visionResponse in TextView then let it speak
-                    val output = saveResult(result)
-                    Log.d(TAG, "Image saved: ${output.absolutePath}")
+                    resultsList = mlKitClassifier.analyzeImage(result.image, relativeOrientation.value as Int)
 
-                    // If the result is a JPEG file, update EXIF metadata with orientation info
-                    if (output.extension == "jpg") {
+                    /* var cvis: CVisionJavBased = CVisionJavBased()
+                     var visionResponse = cvis.getAnalzedResponse(img)
+                     Log.d(TAG, "Response: $visionResponse")
+                     //TODO visualize visionResponse in TextView then let it speak
+                     val output = saveResult(result)
+                     Log.d(TAG, "Image saved: ${output.absolutePath}")
 
-                        val exif = ExifInterface(output.absolutePath)
-                        exif.setAttribute(
-                                ExifInterface.TAG_ORIENTATION, result.orientation.toString())
-                        exif.saveAttributes()
-                        Log.d(TAG, "EXIF metadata saved: ${output.absolutePath}")
-                    }
+                     // If the result is a JPEG file, update EXIF metadata with orientation info
+                     if (output.extension == "jpg") {
 
-                    // Display the photo taken to user
-                    lifecycleScope.launch(Dispatchers.Main) {
-                        navController.navigate(CameraFragmentDirections
-                                .actionCameraToJpegViewer(output.absolutePath)
-                                .setOrientation(result.orientation)
-                                .setDepth(Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q &&
-                                        result.format == ImageFormat.DEPTH_JPEG))
-                    }
+                         val exif = ExifInterface(output.absolutePath)
+                         exif.setAttribute(
+                                 ExifInterface.TAG_ORIENTATION, result.orientation.toString())
+                         exif.saveAttributes()
+                         Log.d(TAG, "EXIF metadata saved: ${output.absolutePath}")
+                     }*/
                 }
 
+
                 // Re-enable click listener after photo is taken
+                // TODO make mltKitClassifier part of Suspend Task instead of this sleep argument
+                sleep(1000)
+                if(resultsList.size > 0){
+                    textView.text = resultsList.joinToString { " $it,\n" }
+                }
                 it.post { it.isEnabled = true }
             }
+
         }
     }
 

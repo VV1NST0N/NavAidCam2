@@ -61,7 +61,7 @@ android {
 }
 
 dependencies {
-
+    implementation 'com.google.mlkit:object-detection:16.2.1'
     implementation 'androidx.camera:camera-camera2:1.0.0-beta03'
     implementation 'com.google.cloud:google-cloud-vision:1.100.3' exclude module: 'guava'
     implementation 'com.google.mlkit:image-labeling:17.0.0' exclude module: 'guava'
