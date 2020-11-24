@@ -16,8 +16,8 @@
 
 package com.example.android.camera2.basic
 
+import android.content.Context
 import android.content.pm.PackageManager
-import android.graphics.Bitmap
 import android.os.Bundle
 import android.view.View
 import android.widget.FrameLayout
@@ -25,15 +25,13 @@ import androidx.appcompat.app.AppCompatActivity
 
 class CameraActivity : AppCompatActivity() {
 
-//    var PACKAGE_NAME = applicationContext.packageName
-  //  var PACKAGE_MANAGER: PackageManager? = applicationContext.packageManager
-
-
     private lateinit var container: FrameLayout
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_camera)
+       setPckManager(applicationContext.packageManager)
+        setPckName(applicationContext.packageName)
         container = findViewById(R.id.fragment_container)
     }
 
@@ -44,6 +42,9 @@ class CameraActivity : AppCompatActivity() {
         container.postDelayed({
             container.systemUiVisibility = FLAGS_FULLSCREEN
         }, IMMERSIVE_FLAG_TIMEOUT)
+    }
+    fun getPck(){
+        return
     }
 
     companion object {
@@ -57,6 +58,14 @@ class CameraActivity : AppCompatActivity() {
         /** Milliseconds used for UI animations */
         const val ANIMATION_FAST_MILLIS = 50L
         const val ANIMATION_SLOW_MILLIS = 100L
+        var PACKAGE_NAME : String = ""
+        var PACKAGE_MANAGER : PackageManager? = null // Context.getPackageManager()
+        fun setPckName(name : String){
+            PACKAGE_NAME = name
+        }
+        fun setPckManager(manager : PackageManager){
+            PACKAGE_MANAGER = manager
+        }
         private const val IMMERSIVE_FLAG_TIMEOUT = 500L
     }
 }

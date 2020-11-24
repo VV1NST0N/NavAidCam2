@@ -1,5 +1,6 @@
 package com.example.android.camera2.basic.classificationInterface.helper;
 
+import android.content.pm.PackageManager;
 import android.media.Image;
 
 import com.example.android.camera2.basic.CameraActivity;
@@ -14,24 +15,22 @@ public class InitializerFactory {
     private static final String ANDROID_CERT_HEADER = "X-Android-Cert";
     private static final String ANDROID_PACKAGE_HEADER = "X-Android-Package";
 
-    public static VisionRequestInitializer getInitializer(String CLOUD_VISION_API_KEY, CameraActivity cameraActivity){
-    /*
+    public static VisionRequestInitializer getInitializer(String CLOUD_VISION_API_KEY, PackageManager manager, String packageName){
+
         return new VisionRequestInitializer(CLOUD_VISION_API_KEY) {
 
             @Override
             protected void initializeVisionRequest(VisionRequest<?> visionRequest)
                     throws IOException {
                 super.initializeVisionRequest(visionRequest);
-                String packageName = cameraActivity.getPackageName();
                 visionRequest.getRequestHeaders().set(ANDROID_PACKAGE_HEADER, packageName);
-
-                String sig = PackageManagerUtils.getSignature(cameraActivity.getPACKAGE_MANAGER(), packageName);
-
+                String sig = PackageManagerUtils.getSignature(manager, packageName);
                 visionRequest.getRequestHeaders().set(ANDROID_CERT_HEADER, sig);
             }
-        };  */
-        return null;
+        };
     }
+
+
 
     public com.google.api.services.vision.v1.model.Image convertToGoogleImage(Image image) {
         //TODO fix this
