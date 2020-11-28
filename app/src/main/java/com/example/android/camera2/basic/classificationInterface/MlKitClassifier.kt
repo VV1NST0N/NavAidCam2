@@ -36,7 +36,7 @@ class MlKitClassifier {
                     val index = label.index
                     val confidence = label.confidence
 
-                    var stringResult = "Label: $text Confidence: $confidence"
+                    var stringResult = "Objekt: $text Wahrscheinlichkeit: $confidence"
                     results.add(stringResult)
                     Log.d("ML Kit: ", text)
                     Log.d("ML Kit: ", confidence.toString())

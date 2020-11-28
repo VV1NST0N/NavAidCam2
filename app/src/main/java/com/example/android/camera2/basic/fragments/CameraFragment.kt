@@ -18,6 +18,8 @@ package com.example.android.camera2.basic.fragments
 
 import android.annotation.SuppressLint
 import android.content.Context
+import android.content.pm.PackageManager
+import android.graphics.Bitmap
 import android.graphics.Color
 import android.graphics.ImageFormat
 import android.hardware.camera2.*
@@ -27,9 +29,11 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.HandlerThread
+import android.speech.tts.TextToSpeech
 import android.util.Log
 import android.view.*
 import android.widget.TextView
+import android.widget.Toast
 import androidx.core.graphics.drawable.toDrawable
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.Observer
@@ -39,7 +43,9 @@ import androidx.navigation.Navigation
 import androidx.navigation.fragment.navArgs
 import com.example.android.camera2.basic.CameraActivity
 import com.example.android.camera2.basic.R
+import com.example.android.camera2.basic.classificationInterface.CloudVision
 import com.example.android.camera2.basic.classificationInterface.MlKitClassifier
+import com.example.android.camera2.basic.classificationInterface.helper.BitmapUtil
 import com.example.android.camera2.basic.utils.AutoFitSurfaceView
 import com.example.android.camera2.basic.utils.OrientationLiveData
 import com.example.android.camera2.basic.utils.computeExifOrientation
@@ -69,12 +75,13 @@ class CameraFragment : Fragment() {
     /** AndroidX navigation arguments */
     private val args: CameraFragmentArgs by navArgs()
 
-
+    private lateinit var textToSpeech : TextToSpeech
     /** Host's navigation controller */
     private val navController: NavController by lazy {
         Navigation.findNavController(requireActivity(), R.id.fragment_container)
     }
     var resultsList: MutableList<String> = mutableListOf<String>()
+    var resultsListOld: MutableList<String> = mutableListOf<String>()
 
     /** Detects, characterizes, and connects to a CameraDevice (used for all camera operations) */
     private val cameraManager: CameraManager by lazy {
@@ -214,6 +221,21 @@ class CameraFragment : Fragment() {
         // session is torn down or session.stopRepeating() is called
         session.setRepeatingRequest(captureRequest.build(), null, cameraHandler)
 
+        textToSpeech = TextToSpeech(CameraActivity.APLICATIONCONTEXT) { status ->
+            if (status == TextToSpeech.SUCCESS) {
+                val ttsLang: Int = textToSpeech.setLanguage(Locale.US)
+                if (ttsLang == TextToSpeech.LANG_MISSING_DATA
+                        || ttsLang == TextToSpeech.LANG_NOT_SUPPORTED) {
+                    Log.e("TTS", "The Language is not supported!")
+                } else {
+                    Log.i("TTS", "Language Supported.")
+                }
+                Log.i("TTS", "Initialization success.")
+            } else {
+                Toast.makeText(CameraActivity.APLICATIONCONTEXT, "TTS Initialization failed!", Toast.LENGTH_SHORT).show()
+            }
+        }
+
         // Listen to the capture button
         capture_button.setOnClickListener {
 
@@ -230,12 +252,24 @@ class CameraFragment : Fragment() {
                     // Save the result to disk
                     Log.d(TAG, "Bevore Shot!")
                     var img = convertToGoogleImageV2(result.image)
+                    var androidImage : Image = result.image
+                    var bitMap : Bitmap = BitmapUtil.getBitmap(androidImage, androidImage.planes, relativeOrientation.value as Int, androidImage.width, androidImage.height)
+
+
                     // var img2 = convertToGoogleImage(result.image)
-                    // var cloudVision : CloudVisionTest = CloudVisionTest(img2, mode = "LABEL_DETECTION")
-                    // var visionResponse2 = cloudVision.performAnalyze()
+                    var cloudVision : CloudVision = CloudVision(bitMap, mode = "LABEL_DETECTION", CameraActivity.PACKAGE_NAME, CameraActivity.PACKAGE_MANAGER as PackageManager)
+                    var resultOfApi : MutableList<com.google.api.services.vision.v1.model.AnnotateImageResponse>? = cloudVision.performAnalyze()
+                    resultsList = mutableListOf<String>()
+                    for (entity in resultOfApi!![0].labelAnnotations){
+                        resultsList.add("Description : ${entity.description} Score: ${entity.score}")
+                    }
+
+
+
                     var mlKitClassifier = MlKitClassifier()
 
-                    resultsList = mlKitClassifier.analyzeImage(result.image, relativeOrientation.value as Int)
+                    resultsListOld = mlKitClassifier.analyzeImage(result.image, relativeOrientation.value as Int)
+
 
                     /* var cvis: CVisionJavBased = CVisionJavBased()
                      var visionResponse = cvis.getAnalzedResponse(img)
@@ -255,12 +289,15 @@ class CameraFragment : Fragment() {
                      }*/
                 }
 
-
                 // Re-enable click listener after photo is taken
                 // TODO make mltKitClassifier part of Suspend Task instead of this sleep argument
                 sleep(1000)
-                if(resultsList.size > 0){
+                if (resultsList.size > 0) {
                     textView.text = resultsList.joinToString { " $it,\n" }
+                    textToSpeech!!.speak(resultsList[0], TextToSpeech.QUEUE_FLUSH, null)
+                    if (resultsList[1] != null) {
+                        textToSpeech!!.speak(resultsList[1], TextToSpeech.QUEUE_ADD, null)
+                    }
                 }
                 it.post { it.isEnabled = true }
             }

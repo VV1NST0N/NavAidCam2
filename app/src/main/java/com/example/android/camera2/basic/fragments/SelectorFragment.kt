@@ -108,8 +108,9 @@ class SelectorFragment : Fragment() {
                         CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP)!!.outputFormats
 
                 // All cameras *must* support JPEG output so we don't need to check characteristics
+                // changed to YUV Format since we do not need JPEG and we can convert YUV way better
                 availableCameras.add(FormatItem(
-                        "$orientation JPEG ($id)", id, ImageFormat.JPEG))
+                        "$orientation JPEG ($id)", id, ImageFormat.YUV_420_888))
 
                 // Return cameras that support RAW capability
                 // TODO reactivate if needed

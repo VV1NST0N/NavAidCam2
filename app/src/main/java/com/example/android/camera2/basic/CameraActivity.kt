@@ -40,6 +40,7 @@ class CameraActivity : AppCompatActivity() {
         setContentView(R.layout.activity_camera)
        setPckManager(applicationContext.packageManager)
         setPckName(applicationContext.packageName)
+        setContext(applicationContext)
         container = findViewById(R.id.fragment_container)
     }
 
@@ -55,6 +56,10 @@ class CameraActivity : AppCompatActivity() {
         return
     }
 
+    override fun getApplicationContext(): Context {
+        return super.getApplicationContext()
+    }
+
     companion object {
         /** Combination of all flags required to put activity into immersive mode */
         const val FLAGS_FULLSCREEN =
@@ -67,7 +72,11 @@ class CameraActivity : AppCompatActivity() {
         const val ANIMATION_FAST_MILLIS = 50L
         const val ANIMATION_SLOW_MILLIS = 100L
         var PACKAGE_NAME : String = ""
+        var APLICATIONCONTEXT : Context? = null
         var PACKAGE_MANAGER : PackageManager? = null // Context.getPackageManager()
+        fun setContext(context : Context){
+            APLICATIONCONTEXT = context as Context
+        }
         fun setPckName(name : String){
             PACKAGE_NAME = name
         }
