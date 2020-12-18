@@ -23,6 +23,7 @@ import android.graphics.Bitmap
 import android.graphics.Color
 import android.graphics.ImageFormat
 import android.hardware.camera2.*
+import android.media.ExifInterface
 import android.media.Image
 import android.media.ImageReader
 import android.os.Build
@@ -44,21 +45,20 @@ import androidx.navigation.fragment.navArgs
 import com.example.android.camera2.basic.CameraActivity
 import com.example.android.camera2.basic.R
 import com.example.android.camera2.basic.classificationInterface.CloudVision
+import com.example.android.camera2.basic.classificationInterface.Constants
+import com.example.android.camera2.basic.classificationInterface.ImageClassificationObj
 import com.example.android.camera2.basic.classificationInterface.MlKitClassifier
 import com.example.android.camera2.basic.classificationInterface.helper.BitmapUtil
 import com.example.android.camera2.basic.utils.AutoFitSurfaceView
 import com.example.android.camera2.basic.utils.OrientationLiveData
 import com.example.android.camera2.basic.utils.computeExifOrientation
 import com.example.android.camera2.basic.utils.getPreviewOutputSize
-import com.google.protobuf.ByteString
+import com.google.api.services.vision.v1.model.AnnotateImageResponse
 import kotlinx.android.synthetic.main.fragment_camera.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
-import java.io.Closeable
-import java.io.File
-import java.io.FileOutputStream
-import java.io.IOException
+import java.io.*
 import java.lang.Thread.sleep
 import java.text.SimpleDateFormat
 import java.util.*
@@ -75,7 +75,8 @@ class CameraFragment : Fragment() {
     /** AndroidX navigation arguments */
     private val args: CameraFragmentArgs by navArgs()
 
-    private lateinit var textToSpeech : TextToSpeech
+    private lateinit var textToSpeech: TextToSpeech
+
     /** Host's navigation controller */
     private val navController: NavController by lazy {
         Navigation.findNavController(requireActivity(), R.id.fragment_container)
@@ -251,54 +252,42 @@ class CameraFragment : Fragment() {
                     // TODO result (CombinedCaptureResult) to Bitmap function
                     // Save the result to disk
                     Log.d(TAG, "Bevore Shot!")
-                    var img = convertToGoogleImageV2(result.image)
-                    var androidImage : Image = result.image
-                    var bitMap : Bitmap = BitmapUtil.getBitmap(androidImage, androidImage.planes, relativeOrientation.value as Int, androidImage.width, androidImage.height)
+                    ImageClassificationObj.setCaptureResult(result)
 
+                    //for(result)
+                    val output = saveResult(result)
+                    Log.d(TAG, "Image saved: ${output.absolutePath}")
 
-                    // var img2 = convertToGoogleImage(result.image)
-                    var cloudVision : CloudVision = CloudVision(bitMap, mode = "LABEL_DETECTION", CameraActivity.PACKAGE_NAME, CameraActivity.PACKAGE_MANAGER as PackageManager)
-                    var resultOfApi : MutableList<com.google.api.services.vision.v1.model.AnnotateImageResponse>? = cloudVision.performAnalyze()
-                    resultsList = mutableListOf<String>()
-                    for (entity in resultOfApi!![0].labelAnnotations){
-                        resultsList.add("Description : ${entity.description} Score: ${entity.score}")
+                    // If the result is a JPEG file, update EXIF metadata with orientation info
+                    if (output.extension == "jpg") {
+
+                        val exif = ExifInterface(output.absolutePath)
+                        exif.setAttribute(
+                                ExifInterface.TAG_ORIENTATION, result.orientation.toString())
+                        exif.saveAttributes()
+                        Log.d(TAG, "EXIF metadata saved: ${output.absolutePath}")
                     }
-
-
-
-                    var mlKitClassifier = MlKitClassifier()
-
-                    resultsListOld = mlKitClassifier.analyzeImage(result.image, relativeOrientation.value as Int)
-
-
-                    /* var cvis: CVisionJavBased = CVisionJavBased()
-                     var visionResponse = cvis.getAnalzedResponse(img)
-                     Log.d(TAG, "Response: $visionResponse")
-                     //TODO visualize visionResponse in TextView then let it speak
-                     val output = saveResult(result)
-                     Log.d(TAG, "Image saved: ${output.absolutePath}")
-
-                     // If the result is a JPEG file, update EXIF metadata with orientation info
-                     if (output.extension == "jpg") {
-
-                         val exif = ExifInterface(output.absolutePath)
-                         exif.setAttribute(
-                                 ExifInterface.TAG_ORIENTATION, result.orientation.toString())
-                         exif.saveAttributes()
-                         Log.d(TAG, "EXIF metadata saved: ${output.absolutePath}")
-                     }*/
+                    sleep(1000)
+                    if (resultsList.size > 0) {
+                        textView.text = resultsList.joinToString { " $it,\n" }
+                        textToSpeech!!.speak(resultsList[0], TextToSpeech.QUEUE_FLUSH, null)
+                        if (resultsList[1] != null) {
+                            textToSpeech!!.speak(resultsList[1], TextToSpeech.QUEUE_ADD, null)
+                        }
+                    }
+                    // Display the photo taken to user
+                    lifecycleScope.launch(Dispatchers.Main) {
+                        navController.navigate(CameraFragmentDirections
+                                .actionCameraFragmentToImageViewerFragment(output.absolutePath)
+                                .setOrientation(result.orientation)
+                                .setDepth(Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q &&
+                                        result.format == ImageFormat.DEPTH_JPEG))
+                    }
                 }
 
                 // Re-enable click listener after photo is taken
                 // TODO make mltKitClassifier part of Suspend Task instead of this sleep argument
-                sleep(1000)
-                if (resultsList.size > 0) {
-                    textView.text = resultsList.joinToString { " $it,\n" }
-                    textToSpeech!!.speak(resultsList[0], TextToSpeech.QUEUE_FLUSH, null)
-                    if (resultsList[1] != null) {
-                        textToSpeech!!.speak(resultsList[1], TextToSpeech.QUEUE_ADD, null)
-                    }
-                }
+
                 it.post { it.isEnabled = true }
             }
 
@@ -438,14 +427,27 @@ class CameraFragment : Fragment() {
                                 CameraCharacteristics.LENS_FACING_FRONT
                         val exifOrientation = computeExifOrientation(rotation, mirrored)
 
+                        var bitMap: Bitmap = BitmapUtil.getBitmap(image, image.planes, rotation, image.width, image.height)
+                        var cloudVision: CloudVision = CloudVision(bitMap, CameraActivity.PACKAGE_NAME, CameraActivity.PACKAGE_MANAGER as PackageManager)
+                        var label: MutableList<com.google.api.services.vision.v1.model.AnnotateImageResponse>? = cloudVision.performAnalyze(mode = Constants.LABEL)
+                        var localization: MutableList<com.google.api.services.vision.v1.model.AnnotateImageResponse>? = cloudVision.performAnalyze(mode = Constants.OBJECT)
+
+                        resultsList= mutableListOf()
+                        for(result in label!!){
+                            for(label in result.labelAnnotations){
+                                resultsList.add("Object: ${label.description} Score: ${label.score} \n")
+                            }
+                        }
+
                         // Build the result and resume progress
                         cont.resume(CombinedCaptureResult(
-                                image, result, exifOrientation, imageReader.imageFormat))
+                                image, result, exifOrientation, imageReader.imageFormat, bitmap = bitMap, labels = label, labelsText = resultsList , localizationObj = localization))
 
                         // There is no need to break out of the loop, this coroutine will suspend
                     }
                 }
             }
+
         }, cameraHandler)
     }
 
@@ -460,6 +462,20 @@ class CameraFragment : Fragment() {
                 try {
                     val output = createFile(requireContext(), "jpg")
                     FileOutputStream(output).use { it.write(bytes) }
+                    cont.resume(output)
+                } catch (exc: IOException) {
+                    Log.e(TAG, "Unable to write JPEG image to file", exc)
+                    cont.resumeWithException(exc)
+                }
+            }
+
+            ImageFormat.YUV_420_888 -> {
+                var byteArrayOutputStream = ByteArrayOutputStream()
+                result.bitmap.compress(Bitmap.CompressFormat.JPEG, 100, byteArrayOutputStream)
+                var byteArray = byteArrayOutputStream.toByteArray()
+                try {
+                    val output = createFile(requireContext(), "jpg")
+                    FileOutputStream(output).use { it.write(byteArray) }
                     cont.resume(output)
                 } catch (exc: IOException) {
                     Log.e(TAG, "Unable to write JPEG image to file", exc)
@@ -518,7 +534,11 @@ class CameraFragment : Fragment() {
                 val image: Image,
                 val metadata: CaptureResult,
                 val orientation: Int,
-                val format: Int
+                val format: Int,
+                val bitmap: Bitmap,
+                val labels: MutableList<AnnotateImageResponse>?,
+                val labelsText: MutableList<String>,
+                val localizationObj: MutableList<AnnotateImageResponse>?
         ) : Closeable {
             override fun close() = image.close()
         }
@@ -543,10 +563,5 @@ class CameraFragment : Fragment() {
         return imageClass.encodeContent(bytes)
     }
 
-    fun convertToGoogleImageV2(image: Image): ByteString {
-        val buffer = image.planes[0].buffer
-        val bytes = ByteArray(buffer.remaining())
-        var imageGoogle: ByteString = ByteString.copyFrom(bytes)
-        return imageGoogle
-    }
+
 }

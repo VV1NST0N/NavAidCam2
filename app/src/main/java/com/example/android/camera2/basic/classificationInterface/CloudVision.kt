@@ -17,7 +17,7 @@ import java.io.IOException
 import java.util.*
 
 
-class CloudVision(image: Bitmap, mode: String, PACKAGE_NAME: String, PACKAGE_MANAGER: PackageManager) {
+class CloudVision(image: Bitmap, PACKAGE_NAME: String, PACKAGE_MANAGER: PackageManager) {
 
     private var CLOUD_VISION_API_KEY = "AIzaSyAfU9O4wuUxhQp7pSIl85Kswp30GnwHVrE"
     private lateinit var image: Bitmap
@@ -30,12 +30,12 @@ class CloudVision(image: Bitmap, mode: String, PACKAGE_NAME: String, PACKAGE_MAN
         this.PACKAGE_MANAGER = PACKAGE_MANAGER
         this.PACKAGE_NAME = PACKAGE_NAME
         this.image = image
-        this.mode = mode
     }
 
-    fun performAnalyze(): MutableList<AnnotateImageResponse>? {
+    fun performAnalyze(mode: String): MutableList<AnnotateImageResponse>? {
         try {
             Log.i("cloud", "started async")
+            this.mode = mode
             val httpTransport = AndroidHttp.newCompatibleTransport()
             val jsonFactory: JsonFactory = GsonFactory.getDefaultInstance()
             val builder = Vision.Builder(httpTransport, jsonFactory, null)
@@ -52,7 +52,7 @@ class CloudVision(image: Bitmap, mode: String, PACKAGE_NAME: String, PACKAGE_MAN
             try {
                 val annotateRequest = vision.images().annotate(batchAnnotateImagesRequest)
 
-                // Due to a bug: requests to Vision API containing large images fail when GZipped.
+
                 annotateRequest.disableGZipContent = true
                 Log.d("CloudVision", "created Cloud Vision request object, sending request")
                 var response = annotateRequest.execute()
@@ -72,18 +72,13 @@ class CloudVision(image: Bitmap, mode: String, PACKAGE_NAME: String, PACKAGE_MAN
 
 
     private fun convertResponseToString(response: BatchAnnotateImagesResponse): MutableList<AnnotateImageResponse>? {
-        // TODO: whooh this is bad. rework everything to not be hardcoded.
+
         if (response.responses[0].isEmpty()) {
             Log.i("cloud", "empty Response")
             return null
         }
         Log.i("cloud", "fullResponse: $response")
-        //TODO If result is "product" then ignore the shit.
 
-        // Todo Have to include more alternatives, top one is often bad. I think photo quality
-        // has alot to do with it. (Not sure)
-
-        // TODO: If lower than [treshold] (e.g. 0.75) notify user that this is incorrect and tell him to focus and hold camera steady.
         if (mode == Constants.LABEL) {
             if (response.responses[0].labelAnnotations[0].description == "Product" || response.responses[0].labelAnnotations[0].description == "product") {
                 return response.responses
@@ -105,11 +100,8 @@ class CloudVision(image: Bitmap, mode: String, PACKAGE_NAME: String, PACKAGE_MAN
         var byteArrayOutputStream = ByteArrayOutputStream()
         image?.compress(Bitmap.CompressFormat.JPEG, 90, byteArrayOutputStream)
         val imageBytes = byteArrayOutputStream.toByteArray()
-        // Base64 encode the JPEG
         base64EncodedImage.encodeContent(imageBytes)
         request.image = base64EncodedImage
-        // adding Features
-        // TODO experiment
         var feature = Feature()
         feature.type = mode
         feature.maxResults = 2

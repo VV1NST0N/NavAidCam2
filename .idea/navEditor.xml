@@ -19,12 +19,7 @@
                         </option>
                         <option name="myPositions">
                           <map>
-                            <entry key="action_camera_to_jpeg_viewer">
-                              <value>
-                                <LayoutPositions />
-                              </value>
-                            </entry>
-                            <entry key="action_camera_to_permissions">
+                            <entry key="action_camera_fragment_to_image_viewer_fragment">
                               <value>
                                 <LayoutPositions />
                               </value>
@@ -39,9 +34,18 @@
                       <LayoutPositions>
                         <option name="myPosition">
                           <Point>
-                            <option name="x" value="744" />
-                            <option name="y" value="20" />
+                            <option name="x" value="881" />
+                            <option name="y" value="-44" />
                           </Point>
+                        </option>
+                        <option name="myPositions">
+                          <map>
+                            <entry key="action_image_viewer_fragment_to_camera_fragment">
+                              <value>
+                                <LayoutPositions />
+                              </value>
+                            </entry>
+                          </map>
                         </option>
                       </LayoutPositions>
                     </value>

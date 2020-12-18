@@ -59,7 +59,31 @@
             android:name="pixel_format"
             app:argType="integer"
             app:nullable="false"/>
+        <action
+            android:id="@+id/action_camera_fragment_to_image_viewer_fragment"
+            app:destination="@id/image_viewer_fragment" />
 
+    </fragment>
+
+    <fragment
+        android:id="@+id/image_viewer_fragment"
+        android:name="com.example.android.camera2.basic.fragments.ImageViewerFragment"
+        android:label="Image Viewer" >
+
+        <argument
+            android:name="file_path"
+            app:argType="string"
+            app:nullable="false"/>
+
+        <argument
+            android:name="orientation"
+            app:argType="integer"
+            android:defaultValue="0" />
+
+        <argument
+            android:name="depth"
+            app:argType="boolean"
+            android:defaultValue="false" />
     </fragment>
 
 </navigation>
