@@ -7,11 +7,16 @@ import android.graphics.Matrix;
 import android.graphics.Rect;
 import android.graphics.YuvImage;
 import android.media.Image;
+import android.media.ImageReader;
+import android.util.Base64;
 import android.util.Log;
 
 import androidx.camera.core.ImageProxy;
 
 import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.nio.ByteBuffer;
 
 /*******************
@@ -20,9 +25,23 @@ import java.nio.ByteBuffer;
 
 public class BitmapUtil {
 
+    public static Bitmap getBitmapFromJPG(Image img){
+        Image.Plane copy = img.getPlanes()[0];
+        ByteBuffer buffer = copy.getBuffer();
+        byte[] bytes = new byte[buffer.capacity()];
+        buffer.get(bytes);
+        Bitmap bitmapImage = BitmapFactory.decodeByteArray(bytes, 0, bytes.length, null);
+        return bitmapImage;
+    }
+
+    public static Bitmap getBitmapFromJPG2(String absolutePath){
+        Bitmap map = BitmapFactory.decodeFile(absolutePath);
+        return map;
+    }
 
     public static Bitmap getBitmap(ByteBuffer data, FrameMetadata metadata) {
         data.rewind();
+
         byte[] imageInBuffer = new byte[data.limit()];
         data.get(imageInBuffer, 0, imageInBuffer.length);
         try {

@@ -39,12 +39,4 @@
         android:contentDescription="@string/capture"
         android:scaleType="fitCenter" />
 
-    <TextView
-        android:id="@+id/lable_view"
-        android:layout_width="fill_parent"
-        android:layout_height="120dp"
-        android:background="@android:color/transparent"
-        android:fontFamily="@font/alfa_slab_one"
-        android:visibility="visible"></TextView>
-
 </FrameLayout>

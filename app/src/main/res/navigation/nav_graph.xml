@@ -84,6 +84,9 @@
             android:name="depth"
             app:argType="boolean"
             android:defaultValue="false" />
+        <action
+            android:id="@+id/action_image_viewer_fragment_to_camera_fragment"
+            app:destination="@id/camera_fragment" />
     </fragment>
 
 </navigation>

@@ -19,7 +19,7 @@ import java.util.*
 
 class CloudVision(image: Bitmap, PACKAGE_NAME: String, PACKAGE_MANAGER: PackageManager) {
 
-    private var CLOUD_VISION_API_KEY = "AIzaSyAfU9O4wuUxhQp7pSIl85Kswp30GnwHVrE"
+    private var CLOUD_VISION_API_KEY = null
     private lateinit var image: Bitmap
     private lateinit var mode: String
     private lateinit var cameraActivity: CameraActivity
@@ -95,6 +95,8 @@ class CloudVision(image: Bitmap, PACKAGE_NAME: String, PACKAGE_MANAGER: PackageM
 
 
     fun addImageRequest(): AnnotateImageRequest {
+        var test : Image
+
         var request: AnnotateImageRequest = AnnotateImageRequest()
         var base64EncodedImage: Image = Image()
         var byteArrayOutputStream = ByteArrayOutputStream()

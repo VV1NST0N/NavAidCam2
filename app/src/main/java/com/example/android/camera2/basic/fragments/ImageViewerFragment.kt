@@ -20,23 +20,31 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Matrix
 import android.os.Bundle
+import android.speech.tts.TextToSpeech
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.util.Log
 import android.view.ViewGroup.LayoutParams.MATCH_PARENT
 import android.widget.ImageView
+import android.widget.TextView
+import android.widget.Toast
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
 import androidx.navigation.fragment.navArgs
 import androidx.viewpager2.widget.ViewPager2
 import com.bumptech.glide.Glide
+import com.example.android.camera2.basic.CameraActivity
+import com.example.android.camera2.basic.R
+import com.example.android.camera2.basic.classificationInterface.ImageClassificationObj
 import com.example.android.camera2.basic.utils.GenericListAdapter
 import com.example.android.camera2.basic.utils.decodeExifOrientation
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import java.io.BufferedInputStream
 import java.io.File
+import java.lang.Thread.sleep
+import java.util.*
 import kotlin.math.max
 
 
@@ -44,7 +52,8 @@ class ImageViewerFragment : Fragment() {
 
     /** AndroidX navigation arguments */
     private val args: ImageViewerFragmentArgs by navArgs()
-
+    //private lateinit var textView: TextView
+    private lateinit var textToSpeech : TextToSpeech
     /** Default Bitmap decoding options */
     private val bitmapOptions = BitmapFactory.Options().apply {
         inJustDecodeBounds = false
@@ -69,6 +78,10 @@ class ImageViewerFragment : Fragment() {
         layoutParams = ViewGroup.LayoutParams(MATCH_PARENT, MATCH_PARENT)
     }
 
+    private fun textViewFactory() = TextView(requireContext()).apply {
+        layoutParams = ViewGroup.LayoutParams(MATCH_PARENT, MATCH_PARENT)
+    }
+
     override fun onCreateView(
             inflater: LayoutInflater,
             container: ViewGroup?,
@@ -76,6 +89,7 @@ class ImageViewerFragment : Fragment() {
     ): View? = ViewPager2(requireContext()).apply {
         // Populate the ViewPager and implement a cache of two media items
         offscreenPageLimit = 2
+
         adapter = GenericListAdapter(
                 bitmapList,
                 itemViewFactory = { imageViewFactory() }) { view, item, _ ->
@@ -92,9 +106,27 @@ class ImageViewerFragment : Fragment() {
 
             // Load input image file
             val inputBuffer = loadInputBuffer()
+            //textView = view.findViewById(R.id.lable_view)
+            //textView.text = "Test the result text by writing some Stuff now \n  more text"
 
+            textToSpeech = TextToSpeech(CameraActivity.APLICATIONCONTEXT) { status ->
+                if (status == TextToSpeech.SUCCESS) {
+                    val ttsLang: Int = textToSpeech.setLanguage(Locale.US)
+                    if (ttsLang == TextToSpeech.LANG_MISSING_DATA
+                            || ttsLang == TextToSpeech.LANG_NOT_SUPPORTED) {
+                        Log.e("TTS", "The Language is not supported!")
+                    } else {
+                        Log.i("TTS", "Language Supported.")
+                    }
+                    Log.i("TTS", "Initialization success.")
+                } else {
+                    Toast.makeText(CameraActivity.APLICATIONCONTEXT, "TTS Initialization failed!", Toast.LENGTH_SHORT).show()
+                }
+            }
             // Load the main JPEG image
+            setTextAndSpeech()
             addItemToViewPager(view, decodeBitmap(inputBuffer, 0, inputBuffer.size))
+
 
             // If we have depth data attached, attempt to load it
             if (isDepth) {
@@ -116,6 +148,7 @@ class ImageViewerFragment : Fragment() {
 
     /** Utility function used to read input file into a byte array */
     private fun loadInputBuffer(): ByteArray {
+
         val inputFile = File(args.filePath)
         return BufferedInputStream(inputFile.inputStream()).let { stream ->
             ByteArray(stream.available()).also {
@@ -129,6 +162,24 @@ class ImageViewerFragment : Fragment() {
     private fun addItemToViewPager(view: ViewPager2, item: Bitmap) = view.post {
         bitmapList.add(item)
         view.adapter!!.notifyDataSetChanged()
+    }
+
+
+
+    private fun setTextAndSpeech(){
+        sleep(1000)
+        var resultsList = ImageClassificationObj.getLabels()
+        if (resultsList.size > 0) {
+            //textView.text = resultsList.joinToString { " $it,\n" }
+            textToSpeech!!.speak(resultsList[0], TextToSpeech.QUEUE_FLUSH, null)
+            if (resultsList[1] != null) {
+                textToSpeech!!.speak(resultsList[1], TextToSpeech.QUEUE_ADD, null)
+            }
+        }
+    }
+
+    private fun drawRect(){
+
     }
 
     /** Utility function used to decode a [Bitmap] from a byte array */

@@ -19,12 +19,6 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent">
 
-    <TextView
-        android:id="@+id/lable_view"
-        android:layout_width="188dp"
-        android:layout_height="90dp"
-        android:text="TextView" />
-
     <ImageButton
         android:id="@+id/capture_button"
         android:layout_width="96dp"

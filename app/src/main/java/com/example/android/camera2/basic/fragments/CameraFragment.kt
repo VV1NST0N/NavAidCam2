@@ -17,11 +17,10 @@
 package com.example.android.camera2.basic.fragments
 
 import android.annotation.SuppressLint
+import android.content.ContentValues.TAG
 import android.content.Context
 import android.content.pm.PackageManager
-import android.graphics.Bitmap
-import android.graphics.Color
-import android.graphics.ImageFormat
+import android.graphics.*
 import android.hardware.camera2.*
 import android.media.ExifInterface
 import android.media.Image
@@ -60,6 +59,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 import java.io.*
 import java.lang.Thread.sleep
+import java.nio.file.Files.createFile
 import java.text.SimpleDateFormat
 import java.util.*
 import java.util.concurrent.ArrayBlockingQueue
@@ -126,7 +126,6 @@ class CameraFragment : Fragment() {
     /** Where the camera preview is displayed */
     private lateinit var viewFinder: AutoFitSurfaceView
 
-    private lateinit var textView: TextView
 
     /** Overlay on top of the camera preview */
     private lateinit var overlay: View
@@ -151,8 +150,7 @@ class CameraFragment : Fragment() {
         super.onViewCreated(view, savedInstanceState)
         overlay = view.findViewById(R.id.overlay)
         viewFinder = view.findViewById(R.id.view_finder)
-        textView = view.findViewById(R.id.lable_view)
-        textView.text = "Test the result text by writing some Stuff now \n  more text"
+
 
         capture_button.setOnApplyWindowInsetsListener { v, insets ->
             v.translationX = (-insets.systemWindowInsetRight).toFloat()
@@ -222,21 +220,6 @@ class CameraFragment : Fragment() {
         // session is torn down or session.stopRepeating() is called
         session.setRepeatingRequest(captureRequest.build(), null, cameraHandler)
 
-        textToSpeech = TextToSpeech(CameraActivity.APLICATIONCONTEXT) { status ->
-            if (status == TextToSpeech.SUCCESS) {
-                val ttsLang: Int = textToSpeech.setLanguage(Locale.US)
-                if (ttsLang == TextToSpeech.LANG_MISSING_DATA
-                        || ttsLang == TextToSpeech.LANG_NOT_SUPPORTED) {
-                    Log.e("TTS", "The Language is not supported!")
-                } else {
-                    Log.i("TTS", "Language Supported.")
-                }
-                Log.i("TTS", "Initialization success.")
-            } else {
-                Toast.makeText(CameraActivity.APLICATIONCONTEXT, "TTS Initialization failed!", Toast.LENGTH_SHORT).show()
-            }
-        }
-
         // Listen to the capture button
         capture_button.setOnClickListener {
 
@@ -252,33 +235,29 @@ class CameraFragment : Fragment() {
                     // TODO result (CombinedCaptureResult) to Bitmap function
                     // Save the result to disk
                     Log.d(TAG, "Bevore Shot!")
-                    ImageClassificationObj.setCaptureResult(result)
+
 
                     //for(result)
                     val output = saveResult(result)
                     Log.d(TAG, "Image saved: ${output.absolutePath}")
 
+                    classifyImage(output.absolutePath)
+                    ImageClassificationObj.setBitmap(drawRectangle(ImageClassificationObj.getBitmap()))
+                    val drawnResult =  saveResultBitMap(ImageClassificationObj.getBitmap(), output.absolutePath)
                     // If the result is a JPEG file, update EXIF metadata with orientation info
                     if (output.extension == "jpg") {
 
-                        val exif = ExifInterface(output.absolutePath)
+                        val exif = ExifInterface(drawnResult.absolutePath)
                         exif.setAttribute(
                                 ExifInterface.TAG_ORIENTATION, result.orientation.toString())
                         exif.saveAttributes()
-                        Log.d(TAG, "EXIF metadata saved: ${output.absolutePath}")
+                        Log.d(TAG, "EXIF metadata saved: ${drawnResult.absolutePath}")
                     }
-                    sleep(1000)
-                    if (resultsList.size > 0) {
-                        textView.text = resultsList.joinToString { " $it,\n" }
-                        textToSpeech!!.speak(resultsList[0], TextToSpeech.QUEUE_FLUSH, null)
-                        if (resultsList[1] != null) {
-                            textToSpeech!!.speak(resultsList[1], TextToSpeech.QUEUE_ADD, null)
-                        }
-                    }
+
                     // Display the photo taken to user
                     lifecycleScope.launch(Dispatchers.Main) {
                         navController.navigate(CameraFragmentDirections
-                                .actionCameraFragmentToImageViewerFragment(output.absolutePath)
+                                .actionCameraFragmentToImageViewerFragment(drawnResult.absolutePath)
                                 .setOrientation(result.orientation)
                                 .setDepth(Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q &&
                                         result.format == ImageFormat.DEPTH_JPEG))
@@ -292,6 +271,29 @@ class CameraFragment : Fragment() {
             }
 
         }
+    }
+
+    fun drawRectangle(bitmap: Bitmap): Bitmap? {
+
+        val canvas = Canvas(bitmap)
+
+        Paint().apply {
+            color = Color.RED
+            isAntiAlias = true
+            strokeWidth = 10F
+            Paint.Style.STROKE
+
+            // TODO location
+            canvas.drawRect(
+                    20f, // left side of the rectangle to be drawn
+                    20f, // top side
+                    bitmap.width / 3 - 20f, // right side
+                    bitmap.height - 20f, // bottom side
+                    this
+            )
+        }
+
+        return bitmap
     }
 
     /** Opens the camera and returns the opened device (as the result of the suspend coroutine) */
@@ -427,22 +429,9 @@ class CameraFragment : Fragment() {
                                 CameraCharacteristics.LENS_FACING_FRONT
                         val exifOrientation = computeExifOrientation(rotation, mirrored)
 
-                        var bitMap: Bitmap = BitmapUtil.getBitmap(image, image.planes, rotation, image.width, image.height)
-                        var cloudVision: CloudVision = CloudVision(bitMap, CameraActivity.PACKAGE_NAME, CameraActivity.PACKAGE_MANAGER as PackageManager)
-                        var label: MutableList<com.google.api.services.vision.v1.model.AnnotateImageResponse>? = cloudVision.performAnalyze(mode = Constants.LABEL)
-                        var localization: MutableList<com.google.api.services.vision.v1.model.AnnotateImageResponse>? = cloudVision.performAnalyze(mode = Constants.OBJECT)
-
-                        resultsList= mutableListOf()
-                        for(result in label!!){
-                            for(label in result.labelAnnotations){
-                                resultsList.add("Object: ${label.description} Score: ${label.score} \n")
-                            }
-                        }
-
                         // Build the result and resume progress
                         cont.resume(CombinedCaptureResult(
-                                image, result, exifOrientation, imageReader.imageFormat, bitmap = bitMap, labels = label, labelsText = resultsList , localizationObj = localization))
-
+                                image, result, exifOrientation, imageReader.imageFormat))
                         // There is no need to break out of the loop, this coroutine will suspend
                     }
                 }
@@ -456,6 +445,7 @@ class CameraFragment : Fragment() {
         when (result.format) {
 
             // When the format is JPEG or DEPTH JPEG we can simply save the bytes as-is
+            // TODO look into if we need to fix this or not currently not working because (maybe) image buffer to bitmap corrupts the jpeg https://stackoverflow.com/questions/46824415/exifinterface-got-an-unsupported-image
             ImageFormat.JPEG, ImageFormat.DEPTH_JPEG -> {
                 val buffer = result.image.planes[0].buffer
                 val bytes = ByteArray(buffer.remaining()).apply { buffer.get(this) }
@@ -469,19 +459,6 @@ class CameraFragment : Fragment() {
                 }
             }
 
-            ImageFormat.YUV_420_888 -> {
-                var byteArrayOutputStream = ByteArrayOutputStream()
-                result.bitmap.compress(Bitmap.CompressFormat.JPEG, 100, byteArrayOutputStream)
-                var byteArray = byteArrayOutputStream.toByteArray()
-                try {
-                    val output = createFile(requireContext(), "jpg")
-                    FileOutputStream(output).use { it.write(byteArray) }
-                    cont.resume(output)
-                } catch (exc: IOException) {
-                    Log.e(TAG, "Unable to write JPEG image to file", exc)
-                    cont.resumeWithException(exc)
-                }
-            }
 
             // When the format is RAW we use the DngCreator utility library
             ImageFormat.RAW_SENSOR -> {
@@ -504,6 +481,28 @@ class CameraFragment : Fragment() {
             }
         }
     }
+
+    private suspend fun saveResultBitMap(result: Bitmap, absPath: String): File = suspendCoroutine { cont ->
+
+
+        // When the format is JPEG or DEPTH JPEG we can simply save the bytes as-is
+        // TODO look into if we need to fix this or not currently not working because (maybe) image buffer to bitmap corrupts the jpeg https://stackoverflow.com/questions/46824415/exifinterface-got-an-unsupported-image
+        var byteArrayOutputStream = ByteArrayOutputStream()
+        result.compress(Bitmap.CompressFormat.JPEG, 100, byteArrayOutputStream)
+        var byteArray = byteArrayOutputStream.toByteArray()
+        try {
+            val output = createFile(requireContext(), "jpg")
+            FileOutputStream(output).use { it.write(byteArray) }
+            cont.resume(output)
+        } catch (exc: IOException) {
+            Log.e(TAG, "Unable to write JPEG image to file", exc)
+            cont.resumeWithException(exc)
+        }
+
+
+        // No other formats are supported by this sample
+    }
+
 
     override fun onStop() {
         super.onStop()
@@ -534,11 +533,7 @@ class CameraFragment : Fragment() {
                 val image: Image,
                 val metadata: CaptureResult,
                 val orientation: Int,
-                val format: Int,
-                val bitmap: Bitmap,
-                val labels: MutableList<AnnotateImageResponse>?,
-                val labelsText: MutableList<String>,
-                val localizationObj: MutableList<AnnotateImageResponse>?
+                val format: Int
         ) : Closeable {
             override fun close() = image.close()
         }
@@ -561,6 +556,23 @@ class CameraFragment : Fragment() {
         val bytes = ByteArray(buffer.remaining())
         val imageClass = com.google.api.services.vision.v1.model.Image()
         return imageClass.encodeContent(bytes)
+    }
+
+    fun classifyImage(path: String) {
+        var bitMap: Bitmap = BitmapUtil.getBitmapFromJPG2(path)
+
+        var cloudVision: CloudVision = CloudVision(bitMap, CameraActivity.PACKAGE_NAME, CameraActivity.PACKAGE_MANAGER as PackageManager)
+        var label: MutableList<com.google.api.services.vision.v1.model.AnnotateImageResponse>? = cloudVision.performAnalyze(mode = Constants.LABEL)
+        var localization: MutableList<com.google.api.services.vision.v1.model.AnnotateImageResponse>? = cloudVision.performAnalyze(mode = Constants.OBJECT)
+        var labels: MutableList<String> = mutableListOf()
+        for (result in label!!) {
+            for (label in result.labelAnnotations) {
+                labels.add("Object: ${label.description} Score: ${label.score} \n")
+            }
+        }
+        ImageClassificationObj.setLabels(labels)
+        ImageClassificationObj.setBitmap(bitMap)
+        ImageClassificationObj.setLocalization(localization)
     }
 
 
