@@ -17,8 +17,8 @@
 package com.example.android.camera2.basic.fragments
 
 import android.annotation.SuppressLint
-import android.content.ContentValues.TAG
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.*
 import android.hardware.camera2.*
@@ -32,8 +32,7 @@ import android.os.HandlerThread
 import android.speech.tts.TextToSpeech
 import android.util.Log
 import android.view.*
-import android.widget.TextView
-import android.widget.Toast
+import android.widget.Button
 import androidx.core.graphics.drawable.toDrawable
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.Observer
@@ -46,20 +45,20 @@ import com.example.android.camera2.basic.R
 import com.example.android.camera2.basic.classificationInterface.CloudVision
 import com.example.android.camera2.basic.classificationInterface.Constants
 import com.example.android.camera2.basic.classificationInterface.ImageClassificationObj
-import com.example.android.camera2.basic.classificationInterface.MlKitClassifier
-import com.example.android.camera2.basic.classificationInterface.helper.BitmapUtil
+import com.example.android.camera2.basic.depth.DepthActivityKt
+import com.example.android.camera2.basic.helper.BitmapUtil
 import com.example.android.camera2.basic.utils.AutoFitSurfaceView
 import com.example.android.camera2.basic.utils.OrientationLiveData
 import com.example.android.camera2.basic.utils.computeExifOrientation
 import com.example.android.camera2.basic.utils.getPreviewOutputSize
 import com.google.api.services.vision.v1.model.AnnotateImageResponse
+import com.google.api.services.vision.v1.model.NormalizedVertex
 import kotlinx.android.synthetic.main.fragment_camera.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 import java.io.*
-import java.lang.Thread.sleep
-import java.nio.file.Files.createFile
+import java.text.DecimalFormat
 import java.text.SimpleDateFormat
 import java.util.*
 import java.util.concurrent.ArrayBlockingQueue
@@ -67,6 +66,9 @@ import java.util.concurrent.TimeoutException
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 import kotlin.coroutines.suspendCoroutine
+import kotlin.math.acos
+import kotlin.math.asin
+import kotlin.math.sqrt
 
 
 class CameraFragment : Fragment() {
@@ -74,7 +76,6 @@ class CameraFragment : Fragment() {
 
     /** AndroidX navigation arguments */
     private val args: CameraFragmentArgs by navArgs()
-
     private lateinit var textToSpeech: TextToSpeech
 
     /** Host's navigation controller */
@@ -158,6 +159,12 @@ class CameraFragment : Fragment() {
             insets.consumeSystemWindowInsets()
         }
 
+        depth_button.setOnApplyWindowInsetsListener { v, insets ->
+            v.translationX = (-insets.systemWindowInsetRight).toFloat()
+            v.translationY = (-insets.systemWindowInsetBottom).toFloat()
+            insets.consumeSystemWindowInsets()
+        }
+
         viewFinder.holder.addCallback(object : SurfaceHolder.Callback {
             override fun surfaceDestroyed(holder: SurfaceHolder) = Unit
 
@@ -220,6 +227,14 @@ class CameraFragment : Fragment() {
         // session is torn down or session.stopRepeating() is called
         session.setRepeatingRequest(captureRequest.build(), null, cameraHandler)
 
+
+
+        depth_button.setOnClickListener{
+            val intent = Intent(requireContext().applicationContext, DepthActivityKt::class.java)
+            startActivity(intent)
+        }
+
+
         // Listen to the capture button
         capture_button.setOnClickListener {
 
@@ -229,7 +244,9 @@ class CameraFragment : Fragment() {
             // Perform I/O heavy operations in a different scope
 
             lifecycleScope.launch(Dispatchers.IO) {
+
                 takePhoto().use { result ->
+                    ImageClassificationObj.clean()
                     Log.d(TAG, "Result received: $result")
                     // TODO take Result and send to google api TODO
                     // TODO result (CombinedCaptureResult) to Bitmap function
@@ -242,8 +259,8 @@ class CameraFragment : Fragment() {
                     Log.d(TAG, "Image saved: ${output.absolutePath}")
 
                     classifyImage(output.absolutePath)
-                    ImageClassificationObj.setBitmap(drawRectangle(ImageClassificationObj.getBitmap()))
-                    val drawnResult =  saveResultBitMap(ImageClassificationObj.getBitmap(), output.absolutePath)
+                    ImageClassificationObj.setBitmap(drawRectangles(ImageClassificationObj.getBitmap()))
+                    val drawnResult = saveResultBitMap(ImageClassificationObj.getBitmap(), output.absolutePath)
                     // If the result is a JPEG file, update EXIF metadata with orientation info
                     if (output.extension == "jpg") {
 
@@ -263,37 +280,145 @@ class CameraFragment : Fragment() {
                                         result.format == ImageFormat.DEPTH_JPEG))
                     }
                 }
-
-                // Re-enable click listener after photo is taken
-                // TODO make mltKitClassifier part of Suspend Task instead of this sleep argument
-
                 it.post { it.isEnabled = true }
             }
 
         }
     }
 
-    fun drawRectangle(bitmap: Bitmap): Bitmap? {
-
-        val canvas = Canvas(bitmap)
-
+    private fun drawRectangle(local: MutableList<NormalizedVertex>, mutableBitmap: Bitmap): Bitmap {
+        val canvas = Canvas(mutableBitmap)
         Paint().apply {
             color = Color.RED
             isAntiAlias = true
-            strokeWidth = 10F
-            Paint.Style.STROKE
-
-            // TODO location
-            canvas.drawRect(
-                    20f, // left side of the rectangle to be drawn
-                    20f, // top side
-                    bitmap.width / 3 - 20f, // right side
-                    bitmap.height - 20f, // bottom side
+            strokeWidth = 20f
+            style = Paint.Style.STROKE
+            val wallpath = Path()
+            wallpath.reset()
+            wallpath.moveTo(local[0].x * mutableBitmap.width, local[0].y * mutableBitmap.height)
+            wallpath.lineTo(local[1].x * mutableBitmap.width, local[1].y * mutableBitmap.height)
+            wallpath.lineTo(local[2].x * mutableBitmap.width, local[2].y * mutableBitmap.height)
+            wallpath.lineTo(local[3].x * mutableBitmap.width, local[3].y * mutableBitmap.height)
+            wallpath.lineTo(local[0].x * mutableBitmap.width, local[0].y * mutableBitmap.height)
+            canvas.drawPath(
+                    wallpath,
                     this
             )
         }
+        return mutableBitmap
+    }
 
-        return bitmap
+    private fun drawVector(local: MutableList<NormalizedVertex>, mutableBitmap: Bitmap, name: String): Bitmap {
+        var centerObjectX = 0F
+        var centerObjectY = 0F
+        if (local[0].x < local[1].x) {
+            centerObjectX = local[0].x * mutableBitmap.width + (local[1].x * mutableBitmap.width - local[0].x * mutableBitmap.width) / 2
+        } else if (local[0].x < local[2].x) {
+            centerObjectX = local[0].x * mutableBitmap.width + (local[2].x * mutableBitmap.width - local[0].x * mutableBitmap.width) / 2
+        } else if (local[0].x > local[1].x) {
+            centerObjectX = local[1].x * mutableBitmap.width + (local[0].x * mutableBitmap.width - local[0].x * mutableBitmap.width) / 2
+        } else if (local[0].x > local[2].x) {
+            centerObjectX = local[2].x * mutableBitmap.width + (local[0].x * mutableBitmap.width - local[0].x * mutableBitmap.width) / 2
+        }
+        if (local[0].y < local[1].y) {
+            centerObjectY = local[0].y * mutableBitmap.height + (local[1].y * mutableBitmap.height - local[0].y * mutableBitmap.height) / 2
+        } else if (local[0].y < local[2].y) {
+            centerObjectY = local[0].y * mutableBitmap.height + (local[2].y * mutableBitmap.height - local[0].y * mutableBitmap.height) / 2
+        } else if (local[0].y > local[1].y) {
+            centerObjectY = local[1].y * mutableBitmap.height + (local[0].y * mutableBitmap.height - local[0].y * mutableBitmap.height) / 2
+        } else if (local[0].y > local[2].y) {
+            centerObjectY = local[2].y * mutableBitmap.height + (local[0].y * mutableBitmap.height - local[0].y * mutableBitmap.height) / 2
+        }
+        var df = DecimalFormat("0.000")
+        var xCenter = mutableBitmap.width / 2F
+        var yCenter = mutableBitmap.height / 2F
+
+        var xObject = centerObjectX
+        var yObject = centerObjectY
+        var xMid = mutableBitmap.width / 2F
+        var yMid = yObject
+        calcDegrees(xCenter, yCenter, xMid, mutableBitmap.height.toFloat(), xObject, yObject, name)
+        //calcDegrees2(xCenter, yCenter, xMid, yMid, xObject, yObject)
+        val canvas = Canvas(mutableBitmap)
+        Paint().apply {
+            color = Color.RED
+            strokeWidth = 20F
+            style = Paint.Style.STROKE
+            val wallpath = Path()
+            wallpath.reset()
+            wallpath.moveTo((xCenter), (yCenter))
+            wallpath.lineTo(xMid, mutableBitmap.height.toFloat())
+
+            wallpath.moveTo((xCenter), (yCenter))
+            wallpath.lineTo(xObject, (yObject))
+            canvas.drawPath(
+                    wallpath,
+                    this
+            )
+        }
+        ImageClassificationObj.setBitmap(mutableBitmap)
+        return mutableBitmap
+    }
+
+    fun calcDegrees(xCenter: Float, yCenter: Float, xMid: Float, yMid: Float, xObject: Float, yObject: Float, name: String) {
+        var distCenterMid = sqrt((yMid - yCenter) * (yMid - yCenter) + (xMid - xCenter) * (xMid - xCenter)).toBigDecimal()
+        var distCenterObject = sqrt((yObject - yCenter) * (yObject - yCenter) + (xObject - xCenter) * (xObject - xCenter)).toBigDecimal()
+        var distMidObject = sqrt((yObject - yMid) * (yObject - yMid) + (xObject - xMid) * (xObject - xMid)).toBigDecimal()
+        var angle = Math.toDegrees(acos((((distCenterMid * distCenterMid) + (distCenterObject * distCenterObject) - (distMidObject * distMidObject)) / (2.toBigDecimal() * distCenterMid * distCenterObject)).toDouble()))
+        Log.i("INFO: ", "Angle with $angle degrees found.")
+        ImageClassificationObj.setAngleMap(name, angle.toInt())
+        var displayLocal = ""
+        when (angle.toInt()) {
+            in 0..44 -> displayLocal = "Oben"
+            in 45..60 -> displayLocal = "Oben Rechts"
+            in 68..134 -> displayLocal = "Rechts"
+            in 135..157 -> displayLocal = "Unten Rechts"
+            in 158..224 -> displayLocal = "Unten"
+            in 225..246 -> displayLocal = "Unten Links"
+            in 247..314 -> displayLocal = "Links"
+            in 315..336 -> displayLocal = "Oben Links"
+            in 337..360 -> displayLocal = "Oben"
+        }
+        ImageClassificationObj.setAngleDesc(name, displayLocal)
+    }
+
+    fun calcDegrees2(xCenter: Float, yCenter: Float, xMid: Float, yMid: Float, xObject: Float, yObject: Float) {
+        var an = sqrt((yMid - yCenter) * (yMid - yCenter) + (xMid - xCenter) * (xMid - xCenter)).toDouble()
+        var hyp = sqrt((yObject - yCenter) * (yObject - yCenter) + (xObject - xCenter) * (xObject - xCenter)).toDouble()
+        var kat = sqrt((yObject - yMid) * (yObject - yMid) + (xObject - xMid) * (xObject - xMid)).toDouble()
+        var angle = Math.toDegrees(asin((kat / hyp).toDouble()))
+        if (xObject < xCenter) {
+            angle = 360 - angle
+        }
+
+        Log.i("INFO: ", "Angle with $angle degrees found.")
+        ImageClassificationObj.setAngle(angle.toInt())
+        var displayLocal = ""
+        when (angle.toInt()) {
+            in 0..44 -> displayLocal = "Oben"
+            in 45..60 -> displayLocal = "Oben Rechts"
+            in 68..134 -> displayLocal = "Rechts"
+            in 135..157 -> displayLocal = "Unten Rechts"
+            in 158..224 -> displayLocal = "Unten"
+            in 225..246 -> displayLocal = "Unten Links"
+            in 247..314 -> displayLocal = "Links"
+            in 315..336 -> displayLocal = "Oben Links"
+            in 337..360 -> displayLocal = "Oben"
+        }
+        ImageClassificationObj.setObjectLocalString(displayLocal)
+    }
+
+
+    fun drawRectangles(bitmap: Bitmap): Bitmap? {
+
+        var mutableBitmap: Bitmap = bitmap.copy(Bitmap.Config.ARGB_8888, true)
+        // TODO rotate Image
+        var localObjs = ImageClassificationObj.getLocalization()[0].localizedObjectAnnotations
+        for (obj in localObjs) {
+            mutableBitmap = drawRectangle(obj.boundingPoly.normalizedVertices, mutableBitmap)
+            mutableBitmap = drawVector(obj.boundingPoly.normalizedVertices, mutableBitmap, obj.name)
+        }
+        return mutableBitmap
     }
 
     /** Opens the camera and returns the opened device (as the result of the suspend coroutine) */
@@ -428,7 +553,7 @@ class CameraFragment : Fragment() {
                         val mirrored = characteristics.get(CameraCharacteristics.LENS_FACING) ==
                                 CameraCharacteristics.LENS_FACING_FRONT
                         val exifOrientation = computeExifOrientation(rotation, mirrored)
-
+                        ImageClassificationObj.setExifOrientation(exifOrientation)
                         // Build the result and resume progress
                         cont.resume(CombinedCaptureResult(
                                 image, result, exifOrientation, imageReader.imageFormat))
@@ -559,14 +684,24 @@ class CameraFragment : Fragment() {
     }
 
     fun classifyImage(path: String) {
+        if (ImageClassificationObj.getBitmap() != null) {
+            //ImageClassificationObj.clean()
+        }
         var bitMap: Bitmap = BitmapUtil.getBitmapFromJPG2(path)
 
         var cloudVision: CloudVision = CloudVision(bitMap, CameraActivity.PACKAGE_NAME, CameraActivity.PACKAGE_MANAGER as PackageManager)
-        var label: MutableList<com.google.api.services.vision.v1.model.AnnotateImageResponse>? = cloudVision.performAnalyze(mode = Constants.LABEL)
-        var localization: MutableList<com.google.api.services.vision.v1.model.AnnotateImageResponse>? = cloudVision.performAnalyze(mode = Constants.OBJECT)
+        ImageClassificationObj.setVision(cloudVision)
+        var label: MutableList<AnnotateImageResponse>? = cloudVision.performAnalyze(mode = Constants.LABEL)
+        var localization: MutableList<AnnotateImageResponse>? = cloudVision.performAnalyze(mode = Constants.OBJECT)
         var labels: MutableList<String> = mutableListOf()
+        var count = 0
         for (result in label!!) {
             for (label in result.labelAnnotations) {
+                if ((label.description.equals("Text") || label.description.equals("Font") || label.description.equals("Signage") || label.description.equals("Advertising") || label.description.equals("Sign")) && count == 0) {
+                    var textRecognitionResult: MutableList<AnnotateImageResponse>? = cloudVision.performAnalyze(mode = Constants.TEXT)
+                    ImageClassificationObj.setTextRecognition(textRecognitionResult)
+                    count++
+                }
                 labels.add("Object: ${label.description} Score: ${label.score} \n")
             }
         }

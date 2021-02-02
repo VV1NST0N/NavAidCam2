@@ -1,9 +1,10 @@
-package com.example.android.camera2.basic.classificationInterface.helper;
+package com.example.android.camera2.basic.helper;
 
 import android.content.pm.PackageManager;
 import android.media.Image;
 
-import com.example.android.camera2.basic.CameraActivity;
+import com.google.api.services.translate.TranslateRequest;
+import com.google.api.services.translate.TranslateRequestInitializer;
 import com.google.api.services.vision.v1.VisionRequest;
 import com.google.api.services.vision.v1.VisionRequestInitializer;
 
@@ -28,9 +29,25 @@ public class InitializerFactory {
                 visionRequest.getRequestHeaders().set(ANDROID_CERT_HEADER, sig);
             }
         };
+
+
+
     }
 
+    public static TranslateRequestInitializer getTranslationInit(String CLOUD_VISION_API_KEY, PackageManager manager, String packageName){
 
+        return new TranslateRequestInitializer(CLOUD_VISION_API_KEY) {
+
+            @Override
+            protected void initializeTranslateRequest(TranslateRequest<?> translateRequest)
+                    throws IOException {
+                super.initializeTranslateRequest(translateRequest);
+                translateRequest.getRequestHeaders().set(ANDROID_PACKAGE_HEADER, packageName);
+                String sig = PackageManagerUtils.getSignature(manager, packageName);
+                translateRequest.getRequestHeaders().set(ANDROID_CERT_HEADER, sig);
+            }
+        };
+    }
 
     public com.google.api.services.vision.v1.model.Image convertToGoogleImage(Image image) {
         //TODO fix this

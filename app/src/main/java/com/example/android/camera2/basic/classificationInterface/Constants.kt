@@ -6,5 +6,6 @@ internal object Constants {
     var LANDMARK = "LANDMARK_DETECTION"
     var LOGO = "LOGO_DETECTION"
     var OBJECT = "OBJECT_LOCALIZATION"
+    var TEXT = "TEXT_DETECTION"
     var NORESPONSE = "NORESPONSE"
 }

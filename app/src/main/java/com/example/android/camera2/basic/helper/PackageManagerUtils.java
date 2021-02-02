@@ -1,4 +1,4 @@
-package com.example.android.camera2.basic.classificationInterface.helper;
+package com.example.android.camera2.basic.helper;
 
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;

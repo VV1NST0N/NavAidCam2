@@ -1,4 +1,4 @@
-package com.example.android.camera2.basic.classificationInterface.helper;
+package com.example.android.camera2.basic.helper;
 
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
@@ -7,16 +7,9 @@ import android.graphics.Matrix;
 import android.graphics.Rect;
 import android.graphics.YuvImage;
 import android.media.Image;
-import android.media.ImageReader;
-import android.util.Base64;
 import android.util.Log;
 
-import androidx.camera.core.ImageProxy;
-
 import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.InputStreamReader;
 import java.nio.ByteBuffer;
 
 /*******************
@@ -30,6 +23,7 @@ public class BitmapUtil {
         ByteBuffer buffer = copy.getBuffer();
         byte[] bytes = new byte[buffer.capacity()];
         buffer.get(bytes);
+
         Bitmap bitmapImage = BitmapFactory.decodeByteArray(bytes, 0, bytes.length, null);
         return bitmapImage;
     }

@@ -23,6 +23,7 @@ import android.hardware.camera2.CameraCharacteristics
 import android.hardware.camera2.CameraManager
 import android.hardware.camera2.CameraMetadata
 import android.os.Bundle
+import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -54,10 +55,12 @@ class SelectorFragment : Fragment() {
 
             val cameraList = enumerateCameras(cameraManager)
 
+
             val layoutId = android.R.layout.simple_list_item_1
             adapter = GenericListAdapter(cameraList, itemLayoutId = layoutId) { view, item, _ ->
                 view.findViewById<TextView>(android.R.id.text1).text = item.title
                 view.setOnClickListener {
+                    Log.i("Lens found:  ${item.title} ", item.format.toString())
                     Navigation.findNavController(requireActivity(), R.id.fragment_container)
                             .navigate(SelectorFragmentDirections.actionSelectorToCamera(
                                     item.cameraId, item.format))
@@ -67,7 +70,9 @@ class SelectorFragment : Fragment() {
 
     }
 
+
     companion object {
+        private data class TestItem(val format: Int, val cameraId : String)
 
         /** Helper class used as a data holder for each selectable camera format item */
         private data class FormatItem(val title: String, val cameraId: String, val format: Int)

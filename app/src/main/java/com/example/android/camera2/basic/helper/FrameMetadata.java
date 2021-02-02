@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package com.example.android.camera2.basic.classificationInterface.helper;
+package com.example.android.camera2.basic.helper;
 
 /*******************
 * From Google MlKit

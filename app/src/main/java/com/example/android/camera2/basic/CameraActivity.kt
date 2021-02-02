@@ -16,24 +16,17 @@
 
 package com.example.android.camera2.basic
 
-import android.app.Activity
 import android.content.Context
 import android.content.pm.PackageManager
-import android.hardware.camera2.CameraAccessException
-import android.hardware.camera2.CameraCharacteristics
-import android.hardware.camera2.CameraManager
-import android.os.Build
 import android.os.Bundle
-import android.util.SparseIntArray
-import android.view.Surface
 import android.view.View
 import android.widget.FrameLayout
-import androidx.annotation.RequiresApi
 import androidx.appcompat.app.AppCompatActivity
 
 class CameraActivity : AppCompatActivity() {
 
     private lateinit var container: FrameLayout
+    private var isDepthSupported = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -74,13 +67,13 @@ class CameraActivity : AppCompatActivity() {
         var PACKAGE_NAME : String = ""
         var APLICATIONCONTEXT : Context? = null
         var PACKAGE_MANAGER : PackageManager? = null // Context.getPackageManager()
-        fun setContext(context : Context){
+        fun setContext(context: Context){
             APLICATIONCONTEXT = context as Context
         }
-        fun setPckName(name : String){
+        fun setPckName(name: String){
             PACKAGE_NAME = name
         }
-        fun setPckManager(manager : PackageManager){
+        fun setPckManager(manager: PackageManager){
             PACKAGE_MANAGER = manager
         }
         private const val IMMERSIVE_FLAG_TIMEOUT = 500L

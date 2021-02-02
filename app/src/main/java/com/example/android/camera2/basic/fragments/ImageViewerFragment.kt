@@ -35,7 +35,6 @@ import androidx.navigation.fragment.navArgs
 import androidx.viewpager2.widget.ViewPager2
 import com.bumptech.glide.Glide
 import com.example.android.camera2.basic.CameraActivity
-import com.example.android.camera2.basic.R
 import com.example.android.camera2.basic.classificationInterface.ImageClassificationObj
 import com.example.android.camera2.basic.utils.GenericListAdapter
 import com.example.android.camera2.basic.utils.decodeExifOrientation
@@ -111,7 +110,7 @@ class ImageViewerFragment : Fragment() {
 
             textToSpeech = TextToSpeech(CameraActivity.APLICATIONCONTEXT) { status ->
                 if (status == TextToSpeech.SUCCESS) {
-                    val ttsLang: Int = textToSpeech.setLanguage(Locale.US)
+                    val ttsLang: Int = textToSpeech.setLanguage(Locale.GERMAN)
                     if (ttsLang == TextToSpeech.LANG_MISSING_DATA
                             || ttsLang == TextToSpeech.LANG_NOT_SUPPORTED) {
                         Log.e("TTS", "The Language is not supported!")
@@ -153,7 +152,6 @@ class ImageViewerFragment : Fragment() {
         return BufferedInputStream(inputFile.inputStream()).let { stream ->
             ByteArray(stream.available()).also {
                 stream.read(it)
-                stream.close()
             }
         }
     }
@@ -168,18 +166,20 @@ class ImageViewerFragment : Fragment() {
 
     private fun setTextAndSpeech(){
         sleep(1000)
-        var resultsList = ImageClassificationObj.getLabels()
-        if (resultsList.size > 0) {
-            //textView.text = resultsList.joinToString { " $it,\n" }
-            textToSpeech!!.speak(resultsList[0], TextToSpeech.QUEUE_FLUSH, null)
-            if (resultsList[1] != null) {
-                textToSpeech!!.speak(resultsList[1], TextToSpeech.QUEUE_ADD, null)
+        var resultsList = ImageClassificationObj.getLocalization()[0].localizedObjectAnnotations
+        textToSpeech.speak("", TextToSpeech.QUEUE_FLUSH, null)
+        for (obj in resultsList){
+            //textToSpeech!!.speak("${ImageClassificationObj.getVision().translateString(obj.name)} wurde mit einer Wahrscheinlichkeit von ${obj.score} erkannt.", TextToSpeech.QUEUE_ADD, null)
+            textToSpeech!!.speak("${ImageClassificationObj.getVision().translateString(obj.name)} wurde mit einer Wahrscheinlichkeit von ${obj.score} erkannt. Es befindet sich auf ${ImageClassificationObj.getAnglesMap().get(obj.name)} grad und ${ImageClassificationObj.getAngleDescription().get(obj.name)} innerhalb des Bildes.", TextToSpeech.QUEUE_ADD, null)
+        }
+        var textList = ImageClassificationObj.getTextRecognition()
+        if (textList != null){
+            textToSpeech.speak("Ein Text wurde erkannt und wird Ihnen nun vorgelesen.", TextToSpeech.QUEUE_ADD, null)
+            for (text in textList){
+                // TODO if locale != Germany translate
+                textToSpeech!!.speak(text.fullTextAnnotation.text, TextToSpeech.QUEUE_ADD, null)
             }
         }
-    }
-
-    private fun drawRect(){
-
     }
 
     /** Utility function used to decode a [Bitmap] from a byte array */
