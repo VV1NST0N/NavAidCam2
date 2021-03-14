@@ -7,6 +7,7 @@ import com.google.api.services.vision.v1.model.AnnotateImageResponse;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 public class ImageClassificationObj {
 
@@ -20,6 +21,8 @@ public class ImageClassificationObj {
     private static Integer angle = null;
     private static String objectLocalString = null;
     //------------------------------------------------------------------
+
+    private Map<UUID, ImageClassificationObj> imageClassificationObjMap;
 
     private static Map<String, Integer> anglesMap = null;
     private static Map<String, String> angleDescription = null;
@@ -64,6 +67,8 @@ public class ImageClassificationObj {
     public static void setTextRecognition(List<AnnotateImageResponse> textRecognition) {
         ImageClassificationObj.textRecognition = textRecognition;
     }
+
+
 
     public static void clean() {
         bitmap = null;

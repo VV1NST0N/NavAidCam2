@@ -18,7 +18,6 @@ package com.example.android.camera2.basic.fragments
 
 import android.annotation.SuppressLint
 import android.content.Context
-import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.*
 import android.hardware.camera2.*
@@ -32,7 +31,6 @@ import android.os.HandlerThread
 import android.speech.tts.TextToSpeech
 import android.util.Log
 import android.view.*
-import android.widget.Button
 import androidx.core.graphics.drawable.toDrawable
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.Observer
@@ -45,7 +43,7 @@ import com.example.android.camera2.basic.R
 import com.example.android.camera2.basic.classificationInterface.CloudVision
 import com.example.android.camera2.basic.classificationInterface.Constants
 import com.example.android.camera2.basic.classificationInterface.ImageClassificationObj
-import com.example.android.camera2.basic.depth.DepthActivityKt
+import com.example.android.camera2.basic.depth.DepthMap
 import com.example.android.camera2.basic.helper.BitmapUtil
 import com.example.android.camera2.basic.utils.AutoFitSurfaceView
 import com.example.android.camera2.basic.utils.OrientationLiveData
@@ -58,6 +56,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 import java.io.*
+import java.nio.ShortBuffer
 import java.text.DecimalFormat
 import java.text.SimpleDateFormat
 import java.util.*
@@ -66,6 +65,7 @@ import java.util.concurrent.TimeoutException
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 import kotlin.coroutines.suspendCoroutine
+import kotlin.experimental.and
 import kotlin.math.acos
 import kotlin.math.asin
 import kotlin.math.sqrt
@@ -159,12 +159,6 @@ class CameraFragment : Fragment() {
             insets.consumeSystemWindowInsets()
         }
 
-        depth_button.setOnApplyWindowInsetsListener { v, insets ->
-            v.translationX = (-insets.systemWindowInsetRight).toFloat()
-            v.translationY = (-insets.systemWindowInsetBottom).toFloat()
-            insets.consumeSystemWindowInsets()
-        }
-
         viewFinder.holder.addCallback(object : SurfaceHolder.Callback {
             override fun surfaceDestroyed(holder: SurfaceHolder) = Unit
 
@@ -229,12 +223,6 @@ class CameraFragment : Fragment() {
 
 
 
-        depth_button.setOnClickListener{
-            val intent = Intent(requireContext().applicationContext, DepthActivityKt::class.java)
-            startActivity(intent)
-        }
-
-
         // Listen to the capture button
         capture_button.setOnClickListener {
 
@@ -252,7 +240,8 @@ class CameraFragment : Fragment() {
                     // TODO result (CombinedCaptureResult) to Bitmap function
                     // Save the result to disk
                     Log.d(TAG, "Bevore Shot!")
-
+                    DepthMap.checkImageDepth3(result.image)
+                    checkImageDepth3(result.image)
 
                     //for(result)
                     val output = saveResult(result)
@@ -263,7 +252,6 @@ class CameraFragment : Fragment() {
                     val drawnResult = saveResultBitMap(ImageClassificationObj.getBitmap(), output.absolutePath)
                     // If the result is a JPEG file, update EXIF metadata with orientation info
                     if (output.extension == "jpg") {
-
                         val exif = ExifInterface(drawnResult.absolutePath)
                         exif.setAttribute(
                                 ExifInterface.TAG_ORIENTATION, result.orientation.toString())
@@ -710,5 +698,160 @@ class CameraFragment : Fragment() {
         ImageClassificationObj.setLocalization(localization)
     }
 
+
+    private fun checkImageDepth2(image: Image): Bitmap? {
+        var bitmap = Bitmap.createBitmap(image.height, image.width, Bitmap.Config.ARGB_8888)
+
+        val plane = image.planes[0]
+        val shortDepthBuffer: ShortBuffer = plane.buffer.asShortBuffer()
+        val pixel = ArrayList<Short>()
+        while (shortDepthBuffer.hasRemaining()) {
+            pixel.add(shortDepthBuffer.get())
+        }
+
+        var stride = plane.rowStride
+        var offset = 0
+        var maxz = -1000f
+        var depthRanges = ShortArray(image.width * image.height)
+        for (y in 0 until image.height) {
+            for (x in 0 until image.width) {
+                val index = image.height * x + y
+                //var depthSample : Short = 0
+                val depthSample = pixel.get((y / 2) * stride + x).toInt()
+                val depthRange = depthSample and 0x1FFF
+                val depthConfidence = depthSample shr 13 and 0x7
+                val depthPercentage = if (depthConfidence == 0) 1f else (depthConfidence - 1) / 7f
+                if (depthRange > maxz) {
+                    maxz = depthRange.toFloat()
+                }
+                depthRanges[index] = depthRange.toShort()
+                //output[offset + x] = depthRange
+            }
+            offset += image.width
+        }
+        System.out.println("we get through first loops")
+        for (y in 0..image.width-1) {
+            for (x in 0..image.height-1) {
+                val z = depthRanges[image.height * x + y]
+                if (z > 0) {
+                    val colour = (z / maxz * 255).toInt()
+                    val c = Color.rgb(colour, colour, colour)
+                    bitmap.setPixel(x, y, c)
+                }
+            }
+        }
+
+        return bitmap
+    }
+
+
+    private fun checkImageDepth3(image: Image): Bitmap? {
+        val height = image.height
+        val width = image.width
+        val bitmap = Bitmap.createBitmap(height, width, Bitmap.Config.ARGB_8888)
+
+        val plane = image.planes[0]
+        val shortDepthBuffer = plane.buffer.asShortBuffer()
+        val pixel = ArrayList<Short>()
+        while (shortDepthBuffer.hasRemaining()) {
+            pixel.add(shortDepthBuffer.get())
+        }
+        val depthRanges = IntArray(width * height)
+
+
+        val stride = plane.rowStride
+        var offset = 0
+        val output = FloatArray(image.width * image.height)
+        var maxz = -1000f
+        for (y in 0 until image.height) {
+            for (x in 0 until image.width) {
+                val index = (y / 2) * stride + x
+                val depthSample = pixel[(y / 2) * stride + x].toInt()
+                val depthRange = depthSample and 0x1FFF
+                val depthConfidence = depthSample shr 13 and 0x7
+                val depthPercentage = if (depthConfidence == 0) 1f else (depthConfidence - 1) / 7f
+                if (depthRange > maxz) {
+                    maxz = depthRange.toFloat()
+                }
+                depthRanges[index] = depthRange
+                output[index] = depthRange.toFloat()
+            }
+            offset += image.width
+        }
+
+        for (y in 0..width-1) {
+            for (x in 0..height-1) {
+                val z = depthRanges[(x / 2) * stride + y]
+                if (z > 0) {
+                    val colour = (z / maxz * 255).toInt()
+                    val c = Color.rgb(colour, colour, colour)
+                    bitmap.setPixel(x, y, c)
+                }
+            }
+        }
+        return bitmap
+    }
+
+    private fun checkImageDepth(image: Image): Bitmap? {
+        val RANGE_MIN = 0.toShort()
+        val RANGE_MAX = 2500.toShort()
+        var bitmap = Bitmap.createBitmap(image.height, image.width, Bitmap.Config.ARGB_8888)
+
+        if (image != null && image.format == ImageFormat.DEPTH16) {
+
+            val depthBuffer = image.planes[0].buffer.asShortBuffer()
+
+            val width = image.width
+            val height = image.height
+
+            val depthRanges = ShortArray(width * height)
+            var minRange: Short = 0
+            var maxRange: Short = 0
+
+            for (x in 0 until width) {
+                for (y in 0 until height) {
+                    val index = height * x + y;
+
+                    val rawSample = depthBuffer.get(width * (height - 1 - y) + x)
+
+                    // From: https://developer.android.com/reference/android/graphics/ImageFormat#DEPTH16
+                    val depthRange = rawSample and 0x1FFF
+                    val depthConfidence = ((rawSample.toInt() shr 13) and 0x7).toShort()
+                    val confidencePercentage = if (depthConfidence.toInt() == 0) 1.0f else (depthConfidence - 1) / 7.0f
+
+                    @Suppress("ConvertTwoComparisonsToRangeCheck")
+                    if (depthRange < minRange && depthRange > 0) {
+                        minRange = depthRange
+                    } else if (depthRange > maxRange) {
+                        maxRange = depthRange
+                    }
+
+                    depthRanges[index] = depthRange
+                }
+            }
+            for (y in 0..width-1) {
+                for (x in 0..height-1) {
+                    val z = depthRanges[y * height + x]
+                    if (z > 0) {
+                        val colour = (z / maxRange * 255).toInt()
+                        val c = Color.rgb(colour, colour, colour)
+                        bitmap.setPixel(x, y, c)
+                    }
+                }
+            }
+        }
+        return bitmap
+    }
+
+    private fun normalizeRange(range: Short, min: Short, max: Short): Int {
+        var normalized = range.toFloat() - min
+        // Clamp to min/max
+        normalized = Math.max(min.toFloat(), normalized)
+        normalized = Math.min(max.toFloat(), normalized)
+        // Normalize to 0 to 255
+        normalized -= min
+        normalized = normalized / (max - min) * 255
+        return normalized.toInt()
+    }
 
 }
