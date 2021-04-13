@@ -1,4 +1,4 @@
-package com.example.android.camera2.basic.helper;
+package com.example.android.camera2.basic.utils.helper;
 
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;

@@ -1,10 +1,10 @@
-package com.example.android.camera2.basic.classificationInterface
+package com.example.android.camera2.basic.imageProcessing.objectClassification
 
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.util.Log
 import com.example.android.camera2.basic.CameraActivity
-import com.example.android.camera2.basic.helper.InitializerFactory
+import com.example.android.camera2.basic.utils.helper.InitializerFactory
 import com.google.api.client.extensions.android.http.AndroidHttp
 import com.google.api.client.googleapis.json.GoogleJsonResponseException
 import com.google.api.client.json.JsonFactory

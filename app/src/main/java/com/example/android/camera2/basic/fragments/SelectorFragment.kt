@@ -33,9 +33,24 @@ import androidx.navigation.Navigation
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.example.android.camera2.basic.R
-import com.example.android.camera2.basic.utils.GenericListAdapter
+import com.example.android.camera2.basic.imageProcessing.depth.DepthStatus
+import com.example.android.camera2.basic.utils.google.GenericListAdapter
 
 class SelectorFragment : Fragment() {
+
+    // my changes
+    var depthId : Int? = null
+    var depthFormat : Int? = null
+
+
+    fun setDepthId(depthId : Int){
+        this.depthId = depthId
+    }
+
+
+    fun setDepthFormat(depthFormat : Int){
+        this.depthFormat = depthFormat
+    }
 
     override fun onCreateView(
             inflater: LayoutInflater,
@@ -60,6 +75,7 @@ class SelectorFragment : Fragment() {
             adapter = GenericListAdapter(cameraList, itemLayoutId = layoutId) { view, item, _ ->
                 view.findViewById<TextView>(android.R.id.text1).text = item.title
                 view.setOnClickListener {
+
                     Log.i("Lens found:  ${item.title} ", item.format.toString())
                     Navigation.findNavController(requireActivity(), R.id.fragment_container)
                             .navigate(SelectorFragmentDirections.actionSelectorToCamera(
@@ -72,6 +88,9 @@ class SelectorFragment : Fragment() {
 
 
     companion object {
+        var depthId : String? = null
+        var depthFormat : Int? = null
+
         private data class TestItem(val format: Int, val cameraId : String)
 
         /** Helper class used as a data holder for each selectable camera format item */
@@ -130,6 +149,8 @@ class SelectorFragment : Fragment() {
                 if (capabilities.contains(
                                 CameraCharacteristics.REQUEST_AVAILABLE_CAPABILITIES_DEPTH_OUTPUT) &&
                         outputFormats.contains(ImageFormat.DEPTH16)) {
+                         DepthStatus.setDepthId(id)
+                        DepthStatus.setDetphFormat(ImageFormat.DEPTH16)
                     availableCameras.add(FormatItem(
                             "$orientation DEPTH ($id)", id, ImageFormat.DEPTH16))
                 }
@@ -137,5 +158,6 @@ class SelectorFragment : Fragment() {
 
             return availableCameras
         }
-    }
+
+        }
 }

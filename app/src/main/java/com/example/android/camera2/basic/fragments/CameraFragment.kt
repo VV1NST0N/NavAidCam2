@@ -18,7 +18,6 @@ package com.example.android.camera2.basic.fragments
 
 import android.annotation.SuppressLint
 import android.content.Context
-import android.content.pm.PackageManager
 import android.graphics.*
 import android.hardware.camera2.*
 import android.media.ExifInterface
@@ -40,35 +39,26 @@ import androidx.navigation.Navigation
 import androidx.navigation.fragment.navArgs
 import com.example.android.camera2.basic.CameraActivity
 import com.example.android.camera2.basic.R
-import com.example.android.camera2.basic.classificationInterface.CloudVision
-import com.example.android.camera2.basic.classificationInterface.Constants
-import com.example.android.camera2.basic.classificationInterface.ImageClassificationObj
-import com.example.android.camera2.basic.depth.DepthMap
-import com.example.android.camera2.basic.helper.BitmapUtil
-import com.example.android.camera2.basic.utils.AutoFitSurfaceView
-import com.example.android.camera2.basic.utils.OrientationLiveData
-import com.example.android.camera2.basic.utils.computeExifOrientation
-import com.example.android.camera2.basic.utils.getPreviewOutputSize
-import com.google.api.services.vision.v1.model.AnnotateImageResponse
-import com.google.api.services.vision.v1.model.NormalizedVertex
+import com.example.android.camera2.basic.imageProcessing.objectClassification.ImageClassificationObj
+import com.example.android.camera2.basic.imageProcessing.MainImageProcessingUnit
+import com.example.android.camera2.basic.imageProcessing.depth.DepthStatus
+import com.example.android.camera2.basic.utils.google.AutoFitSurfaceView
+import com.example.android.camera2.basic.utils.google.OrientationLiveData
+import com.example.android.camera2.basic.utils.google.computeExifOrientation
+import com.example.android.camera2.basic.utils.google.getPreviewOutputSize
 import kotlinx.android.synthetic.main.fragment_camera.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 import java.io.*
-import java.nio.ShortBuffer
-import java.text.DecimalFormat
 import java.text.SimpleDateFormat
 import java.util.*
 import java.util.concurrent.ArrayBlockingQueue
 import java.util.concurrent.TimeoutException
+import kotlin.NoSuchElementException
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 import kotlin.coroutines.suspendCoroutine
-import kotlin.experimental.and
-import kotlin.math.acos
-import kotlin.math.asin
-import kotlin.math.sqrt
 
 
 class CameraFragment : Fragment() {
@@ -82,8 +72,6 @@ class CameraFragment : Fragment() {
     private val navController: NavController by lazy {
         Navigation.findNavController(requireActivity(), R.id.fragment_container)
     }
-    var resultsList: MutableList<String> = mutableListOf<String>()
-    var resultsListOld: MutableList<String> = mutableListOf<String>()
 
     /** Detects, characterizes, and connects to a CameraDevice (used for all camera operations) */
     private val cameraManager: CameraManager by lazy {
@@ -133,9 +121,11 @@ class CameraFragment : Fragment() {
 
     /** The [CameraDevice] that will be opened in this fragment */
     private lateinit var camera: CameraDevice
+    private lateinit var cameraDepth: CameraDevice
 
     /** Internal reference to the ongoing [CameraCaptureSession] configured with our parameters */
     private lateinit var session: CameraCaptureSession
+    private lateinit var sessionDepth: CameraCaptureSession
 
     /** Live data listener for changes in the device orientation relative to the camera */
     private lateinit var relativeOrientation: OrientationLiveData
@@ -143,7 +133,7 @@ class CameraFragment : Fragment() {
     override fun onCreateView(
             inflater: LayoutInflater,
             container: ViewGroup?,
-            savedInstanceState: Bundle?
+            savedInstanceState: Bundle?,
     ): View? = inflater.inflate(R.layout.fragment_camera, container, false)
 
     @SuppressLint("MissingPermission")
@@ -166,7 +156,8 @@ class CameraFragment : Fragment() {
                     holder: SurfaceHolder,
                     format: Int,
                     width: Int,
-                    height: Int) = Unit
+                    height: Int,
+            ) = Unit
 
             override fun surfaceCreated(holder: SurfaceHolder) {
 
@@ -201,6 +192,7 @@ class CameraFragment : Fragment() {
         // Open the selected camera
         camera = openCamera(cameraManager, args.cameraId, cameraHandler)
 
+
         // Initialize an image reader which will be used to capture still photos
         val size = characteristics.get(
                 CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP)!!
@@ -222,7 +214,6 @@ class CameraFragment : Fragment() {
         session.setRepeatingRequest(captureRequest.build(), null, cameraHandler)
 
 
-
         // Listen to the capture button
         capture_button.setOnClickListener {
 
@@ -232,181 +223,150 @@ class CameraFragment : Fragment() {
             // Perform I/O heavy operations in a different scope
 
             lifecycleScope.launch(Dispatchers.IO) {
+                var imageResult: CombinedCaptureResult
+                var imageProcessingUnit = MainImageProcessingUnit()
+                var output: File? = null
 
-                takePhoto().use { result ->
-                    ImageClassificationObj.clean()
+                takePhoto(session, imageReader, imageReaderHandler, cameraHandler).use { result ->
+                    ImageClassificationObj.clean(args.pixelFormat)
                     Log.d(TAG, "Result received: $result")
                     // TODO take Result and send to google api TODO
                     // TODO result (CombinedCaptureResult) to Bitmap function
                     // Save the result to disk
                     Log.d(TAG, "Bevore Shot!")
-                    DepthMap.checkImageDepth3(result.image)
-                    checkImageDepth3(result.image)
-
                     //for(result)
-                    val output = saveResult(result)
-                    Log.d(TAG, "Image saved: ${output.absolutePath}")
+                    if (DepthStatus.getDepthId() != null && false) {
+                        // Creates list of Surfaces where the camera will output frames
+                        viewFinder.destroyDrawingCache()
+                        tryDepthPicture(imageProcessingUnit)
 
-                    classifyImage(output.absolutePath)
-                    ImageClassificationObj.setBitmap(drawRectangles(ImageClassificationObj.getBitmap()))
-                    val drawnResult = saveResultBitMap(ImageClassificationObj.getBitmap(), output.absolutePath)
-                    // If the result is a JPEG file, update EXIF metadata with orientation info
-                    if (output.extension == "jpg") {
-                        val exif = ExifInterface(drawnResult.absolutePath)
-                        exif.setAttribute(
-                                ExifInterface.TAG_ORIENTATION, result.orientation.toString())
-                        exif.saveAttributes()
-                        Log.d(TAG, "EXIF metadata saved: ${drawnResult.absolutePath}")
                     }
+                    var bitmap: Bitmap?
+                    if (DepthStatus.getDepthId() != null && args.pixelFormat == DepthStatus.getDetphFormat()) {
+                        bitmap = imageProcessingUnit.reciveDepth(result)
+                    } else if (result.format != DepthStatus.getDetphFormat()) {
+                        output = saveResult(result)
+                        ImageClassificationObj.setExifOrientation(result.orientation)
+                        bitmap = imageProcessingUnit.classifyImage(output!!)
+                    } else {
+                        throw NoSuchElementException("Missing image data image")
+                    }
+                    if (ImageClassificationObj.getBitmap() != null && ImageClassificationObj.getDepthInformationObj()?.depthMap != null) {
+                        bitmap = imageProcessingUnit.retrieveCombinedBitmap()
+                    }
+                    output = saveResultBitMap(bitmap!!)
+                    imageResult = result
+                }
 
-                    // Display the photo taken to user
-                    lifecycleScope.launch(Dispatchers.Main) {
-                        navController.navigate(CameraFragmentDirections
-                                .actionCameraFragmentToImageViewerFragment(drawnResult.absolutePath)
-                                .setOrientation(result.orientation)
-                                .setDepth(Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q &&
-                                        result.format == ImageFormat.DEPTH_JPEG))
+                // TODO remove methods
+
+                //output = saveResultBitMap(bitmap!!)
+
+                // If the result is a JPEG file, update EXIF metadata with orientation info
+                if (output != null) {
+                    if (output!!.extension == "jpg") {
+                        val exif = ExifInterface(output!!.absolutePath)
+                        exif.setAttribute(
+                                ExifInterface.TAG_ORIENTATION, imageResult.orientation.toString())
+                        exif.saveAttributes()
+                        Log.d(TAG, "EXIF metadata saved: ${output!!.absolutePath}")
                     }
                 }
+                //if((ImageClassificationObj.getBitmap()!=null && ImageClassificationObj.getDepthMap()!=null) || (ImageClassificationObj.getBitmap()!=null && ImageClassificationObj.getDepthMap()==null)){
+                lifecycleScope.launch(Dispatchers.Main) {
+                    navController.run {
+                        navigate(CameraFragmentDirections
+                                .actionCameraFragmentToImageViewerFragment(output!!.absolutePath)
+                                .setOrientation(imageResult.orientation)
+                                .setDepth(Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q &&
+                                        imageResult.format == ImageFormat.DEPTH_JPEG))
+                    }
+                }
+                //)}
+
                 it.post { it.isEnabled = true }
             }
 
         }
     }
 
-    private fun drawRectangle(local: MutableList<NormalizedVertex>, mutableBitmap: Bitmap): Bitmap {
-        val canvas = Canvas(mutableBitmap)
-        Paint().apply {
-            color = Color.RED
-            isAntiAlias = true
-            strokeWidth = 20f
-            style = Paint.Style.STROKE
-            val wallpath = Path()
-            wallpath.reset()
-            wallpath.moveTo(local[0].x * mutableBitmap.width, local[0].y * mutableBitmap.height)
-            wallpath.lineTo(local[1].x * mutableBitmap.width, local[1].y * mutableBitmap.height)
-            wallpath.lineTo(local[2].x * mutableBitmap.width, local[2].y * mutableBitmap.height)
-            wallpath.lineTo(local[3].x * mutableBitmap.width, local[3].y * mutableBitmap.height)
-            wallpath.lineTo(local[0].x * mutableBitmap.width, local[0].y * mutableBitmap.height)
-            canvas.drawPath(
-                    wallpath,
-                    this
-            )
-        }
-        return mutableBitmap
-    }
+    fun tryDepthPicture(imageProcessingUnit: MainImageProcessingUnit) {
+        viewFinder.holder.addCallback(object : SurfaceHolder.Callback {
+            override fun surfaceDestroyed(holder: SurfaceHolder) = Unit
 
-    private fun drawVector(local: MutableList<NormalizedVertex>, mutableBitmap: Bitmap, name: String): Bitmap {
-        var centerObjectX = 0F
-        var centerObjectY = 0F
-        if (local[0].x < local[1].x) {
-            centerObjectX = local[0].x * mutableBitmap.width + (local[1].x * mutableBitmap.width - local[0].x * mutableBitmap.width) / 2
-        } else if (local[0].x < local[2].x) {
-            centerObjectX = local[0].x * mutableBitmap.width + (local[2].x * mutableBitmap.width - local[0].x * mutableBitmap.width) / 2
-        } else if (local[0].x > local[1].x) {
-            centerObjectX = local[1].x * mutableBitmap.width + (local[0].x * mutableBitmap.width - local[0].x * mutableBitmap.width) / 2
-        } else if (local[0].x > local[2].x) {
-            centerObjectX = local[2].x * mutableBitmap.width + (local[0].x * mutableBitmap.width - local[0].x * mutableBitmap.width) / 2
-        }
-        if (local[0].y < local[1].y) {
-            centerObjectY = local[0].y * mutableBitmap.height + (local[1].y * mutableBitmap.height - local[0].y * mutableBitmap.height) / 2
-        } else if (local[0].y < local[2].y) {
-            centerObjectY = local[0].y * mutableBitmap.height + (local[2].y * mutableBitmap.height - local[0].y * mutableBitmap.height) / 2
-        } else if (local[0].y > local[1].y) {
-            centerObjectY = local[1].y * mutableBitmap.height + (local[0].y * mutableBitmap.height - local[0].y * mutableBitmap.height) / 2
-        } else if (local[0].y > local[2].y) {
-            centerObjectY = local[2].y * mutableBitmap.height + (local[0].y * mutableBitmap.height - local[0].y * mutableBitmap.height) / 2
-        }
-        var df = DecimalFormat("0.000")
-        var xCenter = mutableBitmap.width / 2F
-        var yCenter = mutableBitmap.height / 2F
+            override fun surfaceChanged(
+                    holder: SurfaceHolder,
+                    format: Int,
+                    width: Int,
+                    height: Int,
+            ) = Unit
 
-        var xObject = centerObjectX
-        var yObject = centerObjectY
-        var xMid = mutableBitmap.width / 2F
-        var yMid = yObject
-        calcDegrees(xCenter, yCenter, xMid, mutableBitmap.height.toFloat(), xObject, yObject, name)
-        //calcDegrees2(xCenter, yCenter, xMid, yMid, xObject, yObject)
-        val canvas = Canvas(mutableBitmap)
-        Paint().apply {
-            color = Color.RED
-            strokeWidth = 20F
-            style = Paint.Style.STROKE
-            val wallpath = Path()
-            wallpath.reset()
-            wallpath.moveTo((xCenter), (yCenter))
-            wallpath.lineTo(xMid, mutableBitmap.height.toFloat())
+            override fun surfaceCreated(holder: SurfaceHolder) {
+                val characteristicsDepth: CameraCharacteristics by lazy {
+                    cameraManager.getCameraCharacteristics(DepthStatus.getDepthId())
+                }
+                // Selects appropriate preview size and configures view finder
+                val previewSize = getPreviewOutputSize(
+                        viewFinder.display, characteristicsDepth, SurfaceHolder::class.java)
+                Log.d(TAG, "View finder size: ${viewFinder.width} x ${viewFinder.height}")
+                Log.d(TAG, "Selected preview size: $previewSize")
+                viewFinder.setAspectRatio(previewSize.width, previewSize.height)
 
-            wallpath.moveTo((xCenter), (yCenter))
-            wallpath.lineTo(xObject, (yObject))
-            canvas.drawPath(
-                    wallpath,
-                    this
-            )
-        }
-        ImageClassificationObj.setBitmap(mutableBitmap)
-        return mutableBitmap
-    }
+                // To ensure that size is set, initialize camera in the view's thread
+                view?.post {
+                    lifecycleScope.launch(Dispatchers.IO) {
+                        takeDepthPicture(imageProcessingUnit = imageProcessingUnit)
+                    }
 
-    fun calcDegrees(xCenter: Float, yCenter: Float, xMid: Float, yMid: Float, xObject: Float, yObject: Float, name: String) {
-        var distCenterMid = sqrt((yMid - yCenter) * (yMid - yCenter) + (xMid - xCenter) * (xMid - xCenter)).toBigDecimal()
-        var distCenterObject = sqrt((yObject - yCenter) * (yObject - yCenter) + (xObject - xCenter) * (xObject - xCenter)).toBigDecimal()
-        var distMidObject = sqrt((yObject - yMid) * (yObject - yMid) + (xObject - xMid) * (xObject - xMid)).toBigDecimal()
-        var angle = Math.toDegrees(acos((((distCenterMid * distCenterMid) + (distCenterObject * distCenterObject) - (distMidObject * distMidObject)) / (2.toBigDecimal() * distCenterMid * distCenterObject)).toDouble()))
-        Log.i("INFO: ", "Angle with $angle degrees found.")
-        ImageClassificationObj.setAngleMap(name, angle.toInt())
-        var displayLocal = ""
-        when (angle.toInt()) {
-            in 0..44 -> displayLocal = "Oben"
-            in 45..60 -> displayLocal = "Oben Rechts"
-            in 68..134 -> displayLocal = "Rechts"
-            in 135..157 -> displayLocal = "Unten Rechts"
-            in 158..224 -> displayLocal = "Unten"
-            in 225..246 -> displayLocal = "Unten Links"
-            in 247..314 -> displayLocal = "Links"
-            in 315..336 -> displayLocal = "Oben Links"
-            in 337..360 -> displayLocal = "Oben"
-        }
-        ImageClassificationObj.setAngleDesc(name, displayLocal)
-    }
-
-    fun calcDegrees2(xCenter: Float, yCenter: Float, xMid: Float, yMid: Float, xObject: Float, yObject: Float) {
-        var an = sqrt((yMid - yCenter) * (yMid - yCenter) + (xMid - xCenter) * (xMid - xCenter)).toDouble()
-        var hyp = sqrt((yObject - yCenter) * (yObject - yCenter) + (xObject - xCenter) * (xObject - xCenter)).toDouble()
-        var kat = sqrt((yObject - yMid) * (yObject - yMid) + (xObject - xMid) * (xObject - xMid)).toDouble()
-        var angle = Math.toDegrees(asin((kat / hyp).toDouble()))
-        if (xObject < xCenter) {
-            angle = 360 - angle
-        }
-
-        Log.i("INFO: ", "Angle with $angle degrees found.")
-        ImageClassificationObj.setAngle(angle.toInt())
-        var displayLocal = ""
-        when (angle.toInt()) {
-            in 0..44 -> displayLocal = "Oben"
-            in 45..60 -> displayLocal = "Oben Rechts"
-            in 68..134 -> displayLocal = "Rechts"
-            in 135..157 -> displayLocal = "Unten Rechts"
-            in 158..224 -> displayLocal = "Unten"
-            in 225..246 -> displayLocal = "Unten Links"
-            in 247..314 -> displayLocal = "Links"
-            in 315..336 -> displayLocal = "Oben Links"
-            in 337..360 -> displayLocal = "Oben"
-        }
-        ImageClassificationObj.setObjectLocalString(displayLocal)
+                }
+            }
+        })
     }
 
 
-    fun drawRectangles(bitmap: Bitmap): Bitmap? {
-
-        var mutableBitmap: Bitmap = bitmap.copy(Bitmap.Config.ARGB_8888, true)
-        // TODO rotate Image
-        var localObjs = ImageClassificationObj.getLocalization()[0].localizedObjectAnnotations
-        for (obj in localObjs) {
-            mutableBitmap = drawRectangle(obj.boundingPoly.normalizedVertices, mutableBitmap)
-            mutableBitmap = drawVector(obj.boundingPoly.normalizedVertices, mutableBitmap, obj.name)
+    suspend fun takeDepthPicture(imageProcessingUnit: MainImageProcessingUnit) {
+        val characteristicsDepth: CameraCharacteristics by lazy {
+            cameraManager.getCameraCharacteristics(DepthStatus.getDepthId())
         }
-        return mutableBitmap
+
+        /** [HandlerThread] where all camera operations run */
+        val newCameraThread = HandlerThread("CameraThread2").apply { start() }
+
+        /** [Handler] corresponding to [cameraThread] */
+        val newCameraHandler = Handler(newCameraThread.looper)
+
+
+        /** [HandlerThread] where all buffer reading operations run */
+        val newImageReaderThread = HandlerThread("imageReaderThread2").apply { start() }
+
+        /** [Handler] corresponding to [imageReaderThread] */
+        val newImageReaderHandler = Handler(newImageReaderThread.looper)
+
+        var newCamera = openCamera(cameraManager, DepthStatus.getDepthId(), newCameraHandler)
+        val characters = characteristicsDepth.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP)!!
+        val size = characters.getOutputSizes(DepthStatus.getDetphFormat()).maxBy { it.height * it.width }!!
+        //imageReader.close()
+
+        var newImageReader = ImageReader.newInstance(
+                size.width, size.height, DepthStatus.getDetphFormat(), IMAGE_BUFFER_SIZE)
+        Log.d(" ViewFinder: ${viewFinder.holder.surface.toString()}", " ImageReader:  ${newImageReader.surface.toString()} ")
+        val targets = listOf(viewFinder.holder.surface, newImageReader.surface)
+
+        // Start a capture session using our open camera and list of Surfaces where frames will go
+        var newSession = createCaptureSession(newCamera, targets, newCameraHandler)
+
+        val captureRequest = newCamera.createCaptureRequest(
+                CameraDevice.TEMPLATE_PREVIEW).apply { addTarget(viewFinder.holder.surface) }
+
+        // This will keep sending the capture request as frequently as possible until the
+        // session is torn down or session.stopRepeating() is called
+        newSession.setRepeatingRequest(captureRequest.build(), null, newCameraHandler)
+        takePhoto(newSession, newImageReader, newImageReaderHandler, newCameraHandler).use { result ->
+            //TODO doubled save of bitmap
+            var depthBitmap = imageProcessingUnit.reciveDepth(result)
+            //ImageClassificationObj.setDepthInformationObj(depthBitmap)
+        }
+
     }
 
     /** Opens the camera and returns the opened device (as the result of the suspend coroutine) */
@@ -414,7 +374,7 @@ class CameraFragment : Fragment() {
     private suspend fun openCamera(
             manager: CameraManager,
             cameraId: String,
-            handler: Handler? = null
+            handler: Handler? = null,
     ): CameraDevice = suspendCancellableCoroutine { cont ->
         manager.openCamera(cameraId, object : CameraDevice.StateCallback() {
             override fun onOpened(device: CameraDevice) = cont.resume(device)
@@ -447,7 +407,7 @@ class CameraFragment : Fragment() {
     private suspend fun createCaptureSession(
             device: CameraDevice,
             targets: List<Surface>,
-            handler: Handler? = null
+            handler: Handler? = null,
     ): CameraCaptureSession = suspendCoroutine { cont ->
 
         // Create a capture session using the predefined targets; this also involves defining the
@@ -469,7 +429,7 @@ class CameraFragment : Fragment() {
      * template. It performs synchronization between the [CaptureResult] and the [Image] resulting
      * from the single capture, and outputs a [CombinedCaptureResult] object.
      */
-    private suspend fun takePhoto():
+    private suspend fun takePhoto(session: CameraCaptureSession, imageReader: ImageReader, imageReaderHandler: Handler, cameraHandler: Handler):
             CombinedCaptureResult = suspendCoroutine { cont ->
 
         // Flush any images left in the image reader
@@ -493,7 +453,8 @@ class CameraFragment : Fragment() {
                     session: CameraCaptureSession,
                     request: CaptureRequest,
                     timestamp: Long,
-                    frameNumber: Long) {
+                    frameNumber: Long,
+            ) {
                 super.onCaptureStarted(session, request, timestamp, frameNumber)
                 viewFinder.post(animationTask)
             }
@@ -501,7 +462,8 @@ class CameraFragment : Fragment() {
             override fun onCaptureCompleted(
                     session: CameraCaptureSession,
                     request: CaptureRequest,
-                    result: TotalCaptureResult) {
+                    result: TotalCaptureResult,
+            ) {
                 super.onCaptureCompleted(session, request, result)
                 val resultTimestamp = result.get(CaptureResult.SENSOR_TIMESTAMP)
                 Log.d(TAG, "Capture result received: $resultTimestamp")
@@ -595,9 +557,7 @@ class CameraFragment : Fragment() {
         }
     }
 
-    private suspend fun saveResultBitMap(result: Bitmap, absPath: String): File = suspendCoroutine { cont ->
-
-
+    private suspend fun saveResultBitMap(result: Bitmap): File = suspendCoroutine { cont ->
         // When the format is JPEG or DEPTH JPEG we can simply save the bytes as-is
         // TODO look into if we need to fix this or not currently not working because (maybe) image buffer to bitmap corrupts the jpeg https://stackoverflow.com/questions/46824415/exifinterface-got-an-unsupported-image
         var byteArrayOutputStream = ByteArrayOutputStream()
@@ -633,7 +593,7 @@ class CameraFragment : Fragment() {
     }
 
     companion object {
-        private val TAG = CameraFragment::class.java.simpleName
+        val TAG = CameraFragment::class.java.simpleName
 
         /** Maximum number of images that will be held in the reader's buffer */
         private const val IMAGE_BUFFER_SIZE: Int = 3
@@ -646,7 +606,7 @@ class CameraFragment : Fragment() {
                 val image: Image,
                 val metadata: CaptureResult,
                 val orientation: Int,
-                val format: Int
+                val format: Int,
         ) : Closeable {
             override fun close() = image.close()
         }
@@ -656,202 +616,10 @@ class CameraFragment : Fragment() {
          *
          * @return [File] created.
          */
-        private fun createFile(context: Context, extension: String): File {
+        fun createFile(context: Context, extension: String): File {
             val sdf = SimpleDateFormat("yyyy_MM_dd_HH_mm_ss_SSS", Locale.US)
             return File(context.filesDir, "IMG_${sdf.format(Date())}.$extension")
         }
-    }
-
-    fun convertToGoogleImage(image: Image): com.google.api.services.vision.v1.model.Image {
-        //TODO fix this
-        ///val source: ImageDecoder.Source = ImageDecoder.createSource(file)
-        val buffer = image.planes[0].buffer
-        val bytes = ByteArray(buffer.remaining())
-        val imageClass = com.google.api.services.vision.v1.model.Image()
-        return imageClass.encodeContent(bytes)
-    }
-
-    fun classifyImage(path: String) {
-        if (ImageClassificationObj.getBitmap() != null) {
-            //ImageClassificationObj.clean()
-        }
-        var bitMap: Bitmap = BitmapUtil.getBitmapFromJPG2(path)
-
-        var cloudVision: CloudVision = CloudVision(bitMap, CameraActivity.PACKAGE_NAME, CameraActivity.PACKAGE_MANAGER as PackageManager)
-        ImageClassificationObj.setVision(cloudVision)
-        var label: MutableList<AnnotateImageResponse>? = cloudVision.performAnalyze(mode = Constants.LABEL)
-        var localization: MutableList<AnnotateImageResponse>? = cloudVision.performAnalyze(mode = Constants.OBJECT)
-        var labels: MutableList<String> = mutableListOf()
-        var count = 0
-        for (result in label!!) {
-            for (label in result.labelAnnotations) {
-                if ((label.description.equals("Text") || label.description.equals("Font") || label.description.equals("Signage") || label.description.equals("Advertising") || label.description.equals("Sign")) && count == 0) {
-                    var textRecognitionResult: MutableList<AnnotateImageResponse>? = cloudVision.performAnalyze(mode = Constants.TEXT)
-                    ImageClassificationObj.setTextRecognition(textRecognitionResult)
-                    count++
-                }
-                labels.add("Object: ${label.description} Score: ${label.score} \n")
-            }
-        }
-        ImageClassificationObj.setLabels(labels)
-        ImageClassificationObj.setBitmap(bitMap)
-        ImageClassificationObj.setLocalization(localization)
-    }
-
-
-    private fun checkImageDepth2(image: Image): Bitmap? {
-        var bitmap = Bitmap.createBitmap(image.height, image.width, Bitmap.Config.ARGB_8888)
-
-        val plane = image.planes[0]
-        val shortDepthBuffer: ShortBuffer = plane.buffer.asShortBuffer()
-        val pixel = ArrayList<Short>()
-        while (shortDepthBuffer.hasRemaining()) {
-            pixel.add(shortDepthBuffer.get())
-        }
-
-        var stride = plane.rowStride
-        var offset = 0
-        var maxz = -1000f
-        var depthRanges = ShortArray(image.width * image.height)
-        for (y in 0 until image.height) {
-            for (x in 0 until image.width) {
-                val index = image.height * x + y
-                //var depthSample : Short = 0
-                val depthSample = pixel.get((y / 2) * stride + x).toInt()
-                val depthRange = depthSample and 0x1FFF
-                val depthConfidence = depthSample shr 13 and 0x7
-                val depthPercentage = if (depthConfidence == 0) 1f else (depthConfidence - 1) / 7f
-                if (depthRange > maxz) {
-                    maxz = depthRange.toFloat()
-                }
-                depthRanges[index] = depthRange.toShort()
-                //output[offset + x] = depthRange
-            }
-            offset += image.width
-        }
-        System.out.println("we get through first loops")
-        for (y in 0..image.width-1) {
-            for (x in 0..image.height-1) {
-                val z = depthRanges[image.height * x + y]
-                if (z > 0) {
-                    val colour = (z / maxz * 255).toInt()
-                    val c = Color.rgb(colour, colour, colour)
-                    bitmap.setPixel(x, y, c)
-                }
-            }
-        }
-
-        return bitmap
-    }
-
-
-    private fun checkImageDepth3(image: Image): Bitmap? {
-        val height = image.height
-        val width = image.width
-        val bitmap = Bitmap.createBitmap(height, width, Bitmap.Config.ARGB_8888)
-
-        val plane = image.planes[0]
-        val shortDepthBuffer = plane.buffer.asShortBuffer()
-        val pixel = ArrayList<Short>()
-        while (shortDepthBuffer.hasRemaining()) {
-            pixel.add(shortDepthBuffer.get())
-        }
-        val depthRanges = IntArray(width * height)
-
-
-        val stride = plane.rowStride
-        var offset = 0
-        val output = FloatArray(image.width * image.height)
-        var maxz = -1000f
-        for (y in 0 until image.height) {
-            for (x in 0 until image.width) {
-                val index = (y / 2) * stride + x
-                val depthSample = pixel[(y / 2) * stride + x].toInt()
-                val depthRange = depthSample and 0x1FFF
-                val depthConfidence = depthSample shr 13 and 0x7
-                val depthPercentage = if (depthConfidence == 0) 1f else (depthConfidence - 1) / 7f
-                if (depthRange > maxz) {
-                    maxz = depthRange.toFloat()
-                }
-                depthRanges[index] = depthRange
-                output[index] = depthRange.toFloat()
-            }
-            offset += image.width
-        }
-
-        for (y in 0..width-1) {
-            for (x in 0..height-1) {
-                val z = depthRanges[(x / 2) * stride + y]
-                if (z > 0) {
-                    val colour = (z / maxz * 255).toInt()
-                    val c = Color.rgb(colour, colour, colour)
-                    bitmap.setPixel(x, y, c)
-                }
-            }
-        }
-        return bitmap
-    }
-
-    private fun checkImageDepth(image: Image): Bitmap? {
-        val RANGE_MIN = 0.toShort()
-        val RANGE_MAX = 2500.toShort()
-        var bitmap = Bitmap.createBitmap(image.height, image.width, Bitmap.Config.ARGB_8888)
-
-        if (image != null && image.format == ImageFormat.DEPTH16) {
-
-            val depthBuffer = image.planes[0].buffer.asShortBuffer()
-
-            val width = image.width
-            val height = image.height
-
-            val depthRanges = ShortArray(width * height)
-            var minRange: Short = 0
-            var maxRange: Short = 0
-
-            for (x in 0 until width) {
-                for (y in 0 until height) {
-                    val index = height * x + y;
-
-                    val rawSample = depthBuffer.get(width * (height - 1 - y) + x)
-
-                    // From: https://developer.android.com/reference/android/graphics/ImageFormat#DEPTH16
-                    val depthRange = rawSample and 0x1FFF
-                    val depthConfidence = ((rawSample.toInt() shr 13) and 0x7).toShort()
-                    val confidencePercentage = if (depthConfidence.toInt() == 0) 1.0f else (depthConfidence - 1) / 7.0f
-
-                    @Suppress("ConvertTwoComparisonsToRangeCheck")
-                    if (depthRange < minRange && depthRange > 0) {
-                        minRange = depthRange
-                    } else if (depthRange > maxRange) {
-                        maxRange = depthRange
-                    }
-
-                    depthRanges[index] = depthRange
-                }
-            }
-            for (y in 0..width-1) {
-                for (x in 0..height-1) {
-                    val z = depthRanges[y * height + x]
-                    if (z > 0) {
-                        val colour = (z / maxRange * 255).toInt()
-                        val c = Color.rgb(colour, colour, colour)
-                        bitmap.setPixel(x, y, c)
-                    }
-                }
-            }
-        }
-        return bitmap
-    }
-
-    private fun normalizeRange(range: Short, min: Short, max: Short): Int {
-        var normalized = range.toFloat() - min
-        // Clamp to min/max
-        normalized = Math.max(min.toFloat(), normalized)
-        normalized = Math.min(max.toFloat(), normalized)
-        // Normalize to 0 to 255
-        normalized -= min
-        normalized = normalized / (max - min) * 255
-        return normalized.toInt()
     }
 
 }

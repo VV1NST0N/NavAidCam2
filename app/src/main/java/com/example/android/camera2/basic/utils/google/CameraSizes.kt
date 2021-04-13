@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package com.example.android.camera2.basic.utils
+package com.example.android.camera2.basic.utils.google
 
 import android.graphics.Point
 import android.hardware.camera2.CameraCharacteristics

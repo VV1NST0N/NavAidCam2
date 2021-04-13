@@ -1,4 +1,4 @@
- package com.example.android.camera2.basic.classificationInterface
+ package com.example.android.camera2.basic.imageProcessing.objectClassification
 
 internal object Constants {
     // Modes

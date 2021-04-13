@@ -48,7 +48,7 @@
 
         </activity>
         <activity
-            android:name="com.example.android.camera2.basic.depth.DepthActivityKt"
+            android:name="com.example.android.camera2.basic.imageProcessing.DepthActivityKt"
             android:clearTaskOnLaunch="true"
             android:theme="@style/AppTheme">
 

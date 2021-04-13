@@ -18,6 +18,7 @@ package com.example.android.camera2.basic.fragments
 
 import android.Manifest
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Bundle
 import android.widget.Toast
@@ -33,6 +34,8 @@ private val PERMISSIONS_REQUIRED = arrayOf(Manifest.permission.CAMERA)
  * This [Fragment] requests permissions and, once granted, it will navigate to the next fragment
  */
 class PermissionsFragment : Fragment() {
+
+
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
