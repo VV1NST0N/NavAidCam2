@@ -252,7 +252,7 @@ class CameraFragment : Fragment() {
                         throw NoSuchElementException("Missing image data image")
                     }
                     if (ImageClassificationObj.getBitmap() != null && ImageClassificationObj.getDepthInformationObj()?.depthMap != null) {
-                        bitmap = imageProcessingUnit.retrieveCombinedBitmap()
+                        bitmap = imageProcessingUnit.reciveCombinedBitmap()
                     }
                     output = saveResultBitMap(bitmap!!)
                     imageResult = result

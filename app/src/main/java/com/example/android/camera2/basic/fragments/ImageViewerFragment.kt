@@ -19,6 +19,7 @@ package com.example.android.camera2.basic.fragments
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Matrix
+import android.media.Image
 import android.os.Bundle
 import android.speech.tts.TextToSpeech
 import android.view.LayoutInflater
@@ -35,9 +36,10 @@ import androidx.navigation.fragment.navArgs
 import androidx.viewpager2.widget.ViewPager2
 import com.bumptech.glide.Glide
 import com.example.android.camera2.basic.CameraActivity
-import com.example.android.camera2.basic.classificationInterface.ImageClassificationObj
-import com.example.android.camera2.basic.utils.GenericListAdapter
-import com.example.android.camera2.basic.utils.decodeExifOrientation
+import com.example.android.camera2.basic.imageProcessing.depth.DepthStatus
+import com.example.android.camera2.basic.imageProcessing.objectClassification.ImageClassificationObj
+import com.example.android.camera2.basic.utils.google.GenericListAdapter
+import com.example.android.camera2.basic.utils.google.decodeExifOrientation
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import java.io.BufferedInputStream
@@ -123,8 +125,16 @@ class ImageViewerFragment : Fragment() {
                 }
             }
             // Load the main JPEG image
-            setTextAndSpeech()
-            addItemToViewPager(view, decodeBitmap(inputBuffer, 0, inputBuffer.size))
+            if(ImageClassificationObj.getBitmap()!=null){
+                setTextAndSpeech()
+                addItemToViewPager(view, ImageClassificationObj.getBitmap())
+            }
+            if(ImageClassificationObj.getDepthInformationObj() != null){
+                addItemToViewPager(view, ImageClassificationObj.getDepthInformationObj().depthMap)
+            }
+            if(ImageClassificationObj.getCombinedBitmap() != null){
+                addItemToViewPager(view, ImageClassificationObj.getCombinedBitmap())
+            }
 
 
             // If we have depth data attached, attempt to load it
@@ -166,12 +176,17 @@ class ImageViewerFragment : Fragment() {
 
     private fun setTextAndSpeech(){
         sleep(1000)
-        var resultsList = ImageClassificationObj.getLocalization()[0].localizedObjectAnnotations
         textToSpeech.speak("", TextToSpeech.QUEUE_FLUSH, null)
-        for (obj in resultsList){
-            //textToSpeech!!.speak("${ImageClassificationObj.getVision().translateString(obj.name)} wurde mit einer Wahrscheinlichkeit von ${obj.score} erkannt.", TextToSpeech.QUEUE_ADD, null)
-            textToSpeech!!.speak("${ImageClassificationObj.getVision().translateString(obj.name)} wurde mit einer Wahrscheinlichkeit von ${obj.score} erkannt. Es befindet sich auf ${ImageClassificationObj.getAnglesMap().get(obj.name)} grad und ${ImageClassificationObj.getAngleDescription().get(obj.name)} innerhalb des Bildes.", TextToSpeech.QUEUE_ADD, null)
+        if (ImageClassificationObj.getImageClassificationObjMap() != null && ImageClassificationObj.getImageClassificationObjMap().size!! > 0){
+            for (obj in ImageClassificationObj.getImageClassificationObjMap()){
+                var objVal = obj.value
+
+                textToSpeech!!.speak("${ImageClassificationObj.getVision().translateString(objVal.localizedObjectAnnotation.name)} wurde mit einer Wahrscheinlichkeit von ${objVal.localizedObjectAnnotation.score} erkannt. Es befindet sich auf ${objVal.angle.toInt()} grad und ${objVal.objectLocalString} innerhalb des Bildes.", TextToSpeech.QUEUE_ADD, null)
+            }
+        }else{
+            textToSpeech!!.speak("Es konnten keine Objeke erkannt werden.", TextToSpeech.QUEUE_ADD, null)
         }
+
         var textList = ImageClassificationObj.getTextRecognition()
         if (textList != null){
             textToSpeech.speak("Ein Text wurde erkannt und wird Ihnen nun vorgelesen.", TextToSpeech.QUEUE_ADD, null)

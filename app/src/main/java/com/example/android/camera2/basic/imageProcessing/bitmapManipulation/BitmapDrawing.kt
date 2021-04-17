@@ -12,7 +12,7 @@ class BitmapDrawing {
 
     private var angleCalculation : BitmapAngle = BitmapAngle()
     private var boundingBox: BitmapBoundingBox = BitmapBoundingBox()
-    private var depthProcessor = DepthMap()
+    private var depthProcessor : DepthMap = DepthMap()
 
 
     fun processObjectOrientations(bitmap: Bitmap, location: MutableList<AnnotateImageResponse>?): Bitmap? {
@@ -36,7 +36,7 @@ class BitmapDrawing {
 
 
     fun createDepthImage(image: Image): DepthInformationObj? {
-        return drawDepthInfoOnImage(depthProcessor.checkImageDepth(image))
+        return drawDepthInfoOnImage(depthProcessor.createDepthMapFromDepth16(image))
         //return depthProcessor.checkImageDepth(image)
     }
 
@@ -53,6 +53,27 @@ class BitmapDrawing {
         }
         depthInformation.depthMap = bitmap
         return depthInformation
+    }
+
+    fun drawHighestAccurracyObjectsInfoOnImage(bitmap: Bitmap, locations: MutableList<AnnotateImageResponse>?): Bitmap {
+        var name = ""
+        var score = 0.0
+        for(location in locations!!){
+            var locScore = location.localizedObjectAnnotations.get(0).score
+            if(score < locScore){
+                score = locScore.toDouble()
+                name = location.localizedObjectAnnotations.get(0).name
+            }
+        }
+        val canvas = Canvas(bitmap)
+        Paint().apply {
+            flags = Paint.ANTI_ALIAS_FLAG
+            this.color = Color.RED
+            this.textSize = 45f
+            typeface = Typeface.DEFAULT_BOLD
+            canvas.drawText("Highest Score Object: $name Score: $score",20f,bitmap.height-20f,this)
+        }
+        return bitmap
     }
 
     fun mergeDepthAndPicture(): Bitmap? {

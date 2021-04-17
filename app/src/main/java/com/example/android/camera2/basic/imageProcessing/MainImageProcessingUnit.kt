@@ -44,7 +44,6 @@ class MainImageProcessingUnit {
             labels.add("Keine Labels erkannt")
         }
         // TODO use EXIF information
-
         if(true){
             val matrix = Matrix()
             Log.d("Orientation", ImageClassificationObj.getExifOrientation().toString())
@@ -53,24 +52,21 @@ class MainImageProcessingUnit {
         }
         if(localization!=null){
             bitMap = bitmapProcesser.processObjectOrientations(bitMap, localization)
+            bitMap = bitmapProcesser.drawHighestAccurracyObjectsInfoOnImage(bitMap, localization)
         }
-
         ImageClassificationObj.setLabels(labels)
         ImageClassificationObj.setBitmap(bitMap)
-        // TODO this is to remove
-        ImageClassificationObj.setLocalization(localization)
 
         return bitMap
     }
 
     fun reciveDepth(result: CameraFragment.Companion.CombinedCaptureResult): Bitmap? {
-
         var depthInformationObj = bitmapProcesser.createDepthImage(result.image)
         ImageClassificationObj.setDepthInformationObj(depthInformationObj)
         return depthInformationObj?.depthMap
     }
 
-    fun retrieveCombinedBitmap() : Bitmap{
+    fun reciveCombinedBitmap() : Bitmap{
         var combinedBitmap = bitmapProcesser.mergeDepthAndPicture()!!
         ImageClassificationObj.setCombinedBitmap(combinedBitmap)
         return combinedBitmap
