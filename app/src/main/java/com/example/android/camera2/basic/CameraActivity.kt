@@ -26,7 +26,7 @@ import androidx.appcompat.app.AppCompatActivity
 class CameraActivity : AppCompatActivity() {
 
     private lateinit var container: FrameLayout
-    private var isDepthSupported = false
+
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)

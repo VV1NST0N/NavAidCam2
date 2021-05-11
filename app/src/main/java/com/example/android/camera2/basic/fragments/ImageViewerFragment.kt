@@ -36,7 +36,6 @@ import androidx.navigation.fragment.navArgs
 import androidx.viewpager2.widget.ViewPager2
 import com.bumptech.glide.Glide
 import com.example.android.camera2.basic.CameraActivity
-import com.example.android.camera2.basic.imageProcessing.depth.DepthStatus
 import com.example.android.camera2.basic.imageProcessing.objectClassification.ImageClassificationObj
 import com.example.android.camera2.basic.utils.google.GenericListAdapter
 import com.example.android.camera2.basic.utils.google.decodeExifOrientation
@@ -53,8 +52,10 @@ class ImageViewerFragment : Fragment() {
 
     /** AndroidX navigation arguments */
     private val args: ImageViewerFragmentArgs by navArgs()
+
     //private lateinit var textView: TextView
-    private lateinit var textToSpeech : TextToSpeech
+    private lateinit var textToSpeech: TextToSpeech
+
     /** Default Bitmap decoding options */
     private val bitmapOptions = BitmapFactory.Options().apply {
         inJustDecodeBounds = false
@@ -79,14 +80,10 @@ class ImageViewerFragment : Fragment() {
         layoutParams = ViewGroup.LayoutParams(MATCH_PARENT, MATCH_PARENT)
     }
 
-    private fun textViewFactory() = TextView(requireContext()).apply {
-        layoutParams = ViewGroup.LayoutParams(MATCH_PARENT, MATCH_PARENT)
-    }
-
     override fun onCreateView(
             inflater: LayoutInflater,
             container: ViewGroup?,
-            savedInstanceState: Bundle?
+            savedInstanceState: Bundle?,
     ): View? = ViewPager2(requireContext()).apply {
         // Populate the ViewPager and implement a cache of two media items
         offscreenPageLimit = 2
@@ -107,8 +104,6 @@ class ImageViewerFragment : Fragment() {
 
             // Load input image file
             val inputBuffer = loadInputBuffer()
-            //textView = view.findViewById(R.id.lable_view)
-            //textView.text = "Test the result text by writing some Stuff now \n  more text"
 
             textToSpeech = TextToSpeech(CameraActivity.APLICATIONCONTEXT) { status ->
                 if (status == TextToSpeech.SUCCESS) {
@@ -124,15 +119,15 @@ class ImageViewerFragment : Fragment() {
                     Toast.makeText(CameraActivity.APLICATIONCONTEXT, "TTS Initialization failed!", Toast.LENGTH_SHORT).show()
                 }
             }
-            // Load the main JPEG image
-            if(ImageClassificationObj.getBitmap()!=null){
+            // Load the images and start text to speech queue
+            if (ImageClassificationObj.getBitmap() != null) {
                 setTextAndSpeech()
                 addItemToViewPager(view, ImageClassificationObj.getBitmap())
             }
-            if(ImageClassificationObj.getDepthInformationObj() != null){
+            if (ImageClassificationObj.getDepthInformationObj() != null) {
                 addItemToViewPager(view, ImageClassificationObj.getDepthInformationObj().depthMap)
             }
-            if(ImageClassificationObj.getCombinedBitmap() != null){
+            if (ImageClassificationObj.getCombinedBitmap() != null) {
                 addItemToViewPager(view, ImageClassificationObj.getCombinedBitmap())
             }
 
@@ -173,26 +168,25 @@ class ImageViewerFragment : Fragment() {
     }
 
 
-
-    private fun setTextAndSpeech(){
+    private fun setTextAndSpeech() {
         sleep(1000)
         textToSpeech.speak("", TextToSpeech.QUEUE_FLUSH, null)
-        if (ImageClassificationObj.getImageClassificationObjMap() != null && ImageClassificationObj.getImageClassificationObjMap().size!! > 0){
-            for (obj in ImageClassificationObj.getImageClassificationObjMap()){
+        if (ImageClassificationObj.getImageClassificationObjMap() != null && ImageClassificationObj.getImageClassificationObjMap().size!! > 0) {
+            for (obj in ImageClassificationObj.getImageClassificationObjMap()) {
                 var objVal = obj.value
 
                 textToSpeech!!.speak("${ImageClassificationObj.getVision().translateString(objVal.localizedObjectAnnotation.name)} wurde mit einer Wahrscheinlichkeit von ${objVal.localizedObjectAnnotation.score} erkannt. Es befindet sich auf ${objVal.angle.toInt()} grad und ${objVal.objectLocalString} innerhalb des Bildes.", TextToSpeech.QUEUE_ADD, null)
             }
-        }else{
+        } else {
             textToSpeech!!.speak("Es konnten keine Objeke erkannt werden.", TextToSpeech.QUEUE_ADD, null)
         }
 
         var textList = ImageClassificationObj.getTextRecognition()
-        if (textList != null){
+        if (textList != null) {
             textToSpeech.speak("Ein Text wurde erkannt und wird Ihnen nun vorgelesen.", TextToSpeech.QUEUE_ADD, null)
-            for (text in textList){
+            for (text in textList) {
                 // TODO if locale != Germany translate
-                textToSpeech!!.speak(text.fullTextAnnotation.text, TextToSpeech.QUEUE_ADD, null)
+                textToSpeech!!.speak(text.fullTextAnnotation?.text, TextToSpeech.QUEUE_ADD, null)
             }
         }
     }
@@ -225,7 +219,8 @@ class ImageViewerFragment : Fragment() {
             // Sanitize input arguments
             assert(start >= 0) { "Invalid start marker: $start" }
             assert(jpegBuffer.size > start) {
-                "Buffer size (${jpegBuffer.size}) smaller than start marker ($start)" }
+                "Buffer size (${jpegBuffer.size}) smaller than start marker ($start)"
+            }
 
             // Perform a linear search until the delimiter is found
             for (i in start until jpegBuffer.size - 1) {

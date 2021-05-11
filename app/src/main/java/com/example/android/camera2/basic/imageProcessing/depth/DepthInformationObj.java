@@ -1,4 +1,4 @@
-package com.example.android.camera2.basic.imageProcessing.objectClassification;
+package com.example.android.camera2.basic.imageProcessing.depth;
 
 import android.graphics.Bitmap;
 

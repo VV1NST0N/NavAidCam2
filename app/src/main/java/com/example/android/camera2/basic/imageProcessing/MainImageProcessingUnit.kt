@@ -19,41 +19,37 @@ class MainImageProcessingUnit {
 
     fun classifyImage(resultFile: File): Bitmap? {
 
-        // TODO find out why getBitMapFromJPG does not work
-        //var bitMap: Bitmap = BitmapUtil.getBitmapFromJPG2(path)
-        var bitMap =  BitmapUtil.getBitmapFromJPG2(resultFile.absolutePath)
+        var bitMap = BitmapUtil.getBitmapFromJPG(resultFile.absolutePath)
+        val matrix = Matrix()
+        matrix.setRotate(90f)
+        bitMap = Bitmap.createBitmap(bitMap, 0, 0, bitMap.width, bitMap.height, matrix, true)
 
         var cloudVision: CloudVision = CloudVision(bitMap, CameraActivity.PACKAGE_NAME, CameraActivity.PACKAGE_MANAGER as PackageManager)
         ImageClassificationObj.setVision(cloudVision)
         var label: MutableList<AnnotateImageResponse>? = cloudVision.performAnalyze(mode = Constants.LABEL)
         var localization: MutableList<AnnotateImageResponse>? = cloudVision.performAnalyze(mode = Constants.OBJECT)
         var labels: MutableList<String> = mutableListOf()
-        var count = 0
-        if(label!= null){
+        var read = false
+        if (label != null) {
             for (result in label!!) {
                 for (label in result.labelAnnotations) {
-                    if ((label.description.equals("Text") || label.description.equals("Font") || label.description.equals("Signage") || label.description.equals("Advertising") || label.description.equals("Sign")) && count == 0) {
+                    if ((label.description.equals("Text") || label.description.equals("Font") || label.description.equals("Signage") || label.description.equals("Advertising") || label.description.equals("Sign")) && read == false) {
                         var textRecognitionResult: MutableList<AnnotateImageResponse>? = cloudVision.performAnalyze(mode = Constants.TEXT)
                         ImageClassificationObj.setTextRecognition(textRecognitionResult)
-                        count++
+                        read = true
                     }
                     labels.add("Object: ${label.description} Score: ${label.score} \n")
                 }
             }
-        }else{
+        } else {
             labels.add("Keine Labels erkannt")
         }
         // TODO use EXIF information
-        if(true){
-            val matrix = Matrix()
-            Log.d("Orientation", ImageClassificationObj.getExifOrientation().toString())
-            matrix.setRotate(90f)
-            bitMap = Bitmap.createBitmap(bitMap, 0, 0, bitMap.width, bitMap.height, matrix, true)
-        }
-        if(localization!=null){
+        if (localization != null) {
             bitMap = bitmapProcesser.processObjectOrientations(bitMap, localization)
             bitMap = bitmapProcesser.drawHighestAccurracyObjectsInfoOnImage(bitMap, localization)
         }
+
         ImageClassificationObj.setLabels(labels)
         ImageClassificationObj.setBitmap(bitMap)
 
@@ -66,7 +62,7 @@ class MainImageProcessingUnit {
         return depthInformationObj?.depthMap
     }
 
-    fun reciveCombinedBitmap() : Bitmap{
+    fun reciveCombinedBitmap(): Bitmap {
         var combinedBitmap = bitmapProcesser.mergeDepthAndPicture()!!
         ImageClassificationObj.setCombinedBitmap(combinedBitmap)
         return combinedBitmap

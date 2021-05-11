@@ -38,19 +38,7 @@ import com.example.android.camera2.basic.utils.google.GenericListAdapter
 
 class SelectorFragment : Fragment() {
 
-    // my changes
-    var depthId : Int? = null
-    var depthFormat : Int? = null
 
-
-    fun setDepthId(depthId : Int){
-        this.depthId = depthId
-    }
-
-
-    fun setDepthFormat(depthFormat : Int){
-        this.depthFormat = depthFormat
-    }
 
     override fun onCreateView(
             inflater: LayoutInflater,

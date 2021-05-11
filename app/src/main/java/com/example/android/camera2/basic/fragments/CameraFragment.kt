@@ -66,7 +66,7 @@ class CameraFragment : Fragment() {
 
     /** AndroidX navigation arguments */
     private val args: CameraFragmentArgs by navArgs()
-    private lateinit var textToSpeech: TextToSpeech
+
 
     /** Host's navigation controller */
     private val navController: NavController by lazy {
@@ -121,11 +121,11 @@ class CameraFragment : Fragment() {
 
     /** The [CameraDevice] that will be opened in this fragment */
     private lateinit var camera: CameraDevice
-    private lateinit var cameraDepth: CameraDevice
+
 
     /** Internal reference to the ongoing [CameraCaptureSession] configured with our parameters */
     private lateinit var session: CameraCaptureSession
-    private lateinit var sessionDepth: CameraCaptureSession
+
 
     /** Live data listener for changes in the device orientation relative to the camera */
     private lateinit var relativeOrientation: OrientationLiveData
@@ -197,6 +197,13 @@ class CameraFragment : Fragment() {
         val size = characteristics.get(
                 CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP)!!
                 .getOutputSizes(args.pixelFormat).maxBy { it.height * it.width }!!
+        /*if(DepthStatus.getDetphFormat()==ImageFormat.DEPTH16){
+            imageReader = ImageReader.newInstance(
+                    240, 180, ImageFormat.DEPTH16, IMAGE_BUFFER_SIZE)
+        }else{
+            imageReader = ImageReader.newInstance(
+                    size.width, size.height, args.pixelFormat, IMAGE_BUFFER_SIZE)
+        }*/
         imageReader = ImageReader.newInstance(
                 size.width, size.height, args.pixelFormat, IMAGE_BUFFER_SIZE)
 
@@ -230,19 +237,11 @@ class CameraFragment : Fragment() {
                 takePhoto(session, imageReader, imageReaderHandler, cameraHandler).use { result ->
                     ImageClassificationObj.clean(args.pixelFormat)
                     Log.d(TAG, "Result received: $result")
-                    // TODO take Result and send to google api TODO
-                    // TODO result (CombinedCaptureResult) to Bitmap function
                     // Save the result to disk
                     Log.d(TAG, "Bevore Shot!")
                     //for(result)
-                    if (DepthStatus.getDepthId() != null && false) {
-                        // Creates list of Surfaces where the camera will output frames
-                        viewFinder.destroyDrawingCache()
-                        tryDepthPicture(imageProcessingUnit)
-
-                    }
                     var bitmap: Bitmap?
-                    if (DepthStatus.getDepthId() != null && args.pixelFormat == DepthStatus.getDetphFormat()) {
+                    if (DepthStatus.getDepthId() != null && result.format == DepthStatus.getDetphFormat()) {
                         bitmap = imageProcessingUnit.reciveDepth(result)
                     } else if (result.format != DepthStatus.getDetphFormat()) {
                         output = saveResult(result)
@@ -258,10 +257,6 @@ class CameraFragment : Fragment() {
                     imageResult = result
                 }
 
-                // TODO remove methods
-
-                //output = saveResultBitMap(bitmap!!)
-
                 // If the result is a JPEG file, update EXIF metadata with orientation info
                 if (output != null) {
                     if (output!!.extension == "jpg") {
@@ -272,7 +267,6 @@ class CameraFragment : Fragment() {
                         Log.d(TAG, "EXIF metadata saved: ${output!!.absolutePath}")
                     }
                 }
-                //if((ImageClassificationObj.getBitmap()!=null && ImageClassificationObj.getDepthMap()!=null) || (ImageClassificationObj.getBitmap()!=null && ImageClassificationObj.getDepthMap()==null)){
                 lifecycleScope.launch(Dispatchers.Main) {
                     navController.run {
                         navigate(CameraFragmentDirections
@@ -282,91 +276,9 @@ class CameraFragment : Fragment() {
                                         imageResult.format == ImageFormat.DEPTH_JPEG))
                     }
                 }
-                //)}
-
                 it.post { it.isEnabled = true }
             }
-
         }
-    }
-
-    fun tryDepthPicture(imageProcessingUnit: MainImageProcessingUnit) {
-        viewFinder.holder.addCallback(object : SurfaceHolder.Callback {
-            override fun surfaceDestroyed(holder: SurfaceHolder) = Unit
-
-            override fun surfaceChanged(
-                    holder: SurfaceHolder,
-                    format: Int,
-                    width: Int,
-                    height: Int,
-            ) = Unit
-
-            override fun surfaceCreated(holder: SurfaceHolder) {
-                val characteristicsDepth: CameraCharacteristics by lazy {
-                    cameraManager.getCameraCharacteristics(DepthStatus.getDepthId())
-                }
-                // Selects appropriate preview size and configures view finder
-                val previewSize = getPreviewOutputSize(
-                        viewFinder.display, characteristicsDepth, SurfaceHolder::class.java)
-                Log.d(TAG, "View finder size: ${viewFinder.width} x ${viewFinder.height}")
-                Log.d(TAG, "Selected preview size: $previewSize")
-                viewFinder.setAspectRatio(previewSize.width, previewSize.height)
-
-                // To ensure that size is set, initialize camera in the view's thread
-                view?.post {
-                    lifecycleScope.launch(Dispatchers.IO) {
-                        takeDepthPicture(imageProcessingUnit = imageProcessingUnit)
-                    }
-
-                }
-            }
-        })
-    }
-
-
-    suspend fun takeDepthPicture(imageProcessingUnit: MainImageProcessingUnit) {
-        val characteristicsDepth: CameraCharacteristics by lazy {
-            cameraManager.getCameraCharacteristics(DepthStatus.getDepthId())
-        }
-
-        /** [HandlerThread] where all camera operations run */
-        val newCameraThread = HandlerThread("CameraThread2").apply { start() }
-
-        /** [Handler] corresponding to [cameraThread] */
-        val newCameraHandler = Handler(newCameraThread.looper)
-
-
-        /** [HandlerThread] where all buffer reading operations run */
-        val newImageReaderThread = HandlerThread("imageReaderThread2").apply { start() }
-
-        /** [Handler] corresponding to [imageReaderThread] */
-        val newImageReaderHandler = Handler(newImageReaderThread.looper)
-
-        var newCamera = openCamera(cameraManager, DepthStatus.getDepthId(), newCameraHandler)
-        val characters = characteristicsDepth.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP)!!
-        val size = characters.getOutputSizes(DepthStatus.getDetphFormat()).maxBy { it.height * it.width }!!
-        //imageReader.close()
-
-        var newImageReader = ImageReader.newInstance(
-                size.width, size.height, DepthStatus.getDetphFormat(), IMAGE_BUFFER_SIZE)
-        Log.d(" ViewFinder: ${viewFinder.holder.surface.toString()}", " ImageReader:  ${newImageReader.surface.toString()} ")
-        val targets = listOf(viewFinder.holder.surface, newImageReader.surface)
-
-        // Start a capture session using our open camera and list of Surfaces where frames will go
-        var newSession = createCaptureSession(newCamera, targets, newCameraHandler)
-
-        val captureRequest = newCamera.createCaptureRequest(
-                CameraDevice.TEMPLATE_PREVIEW).apply { addTarget(viewFinder.holder.surface) }
-
-        // This will keep sending the capture request as frequently as possible until the
-        // session is torn down or session.stopRepeating() is called
-        newSession.setRepeatingRequest(captureRequest.build(), null, newCameraHandler)
-        takePhoto(newSession, newImageReader, newImageReaderHandler, newCameraHandler).use { result ->
-            //TODO doubled save of bitmap
-            var depthBitmap = imageProcessingUnit.reciveDepth(result)
-            //ImageClassificationObj.setDepthInformationObj(depthBitmap)
-        }
-
     }
 
     /** Opens the camera and returns the opened device (as the result of the suspend coroutine) */

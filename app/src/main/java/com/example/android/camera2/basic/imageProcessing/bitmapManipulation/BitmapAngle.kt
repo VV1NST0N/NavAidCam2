@@ -36,7 +36,7 @@ class BitmapAngle {
         var distMidObject = sqrt((yObject - yMid) * (yObject - yMid) + (xObject - xMid) * (xObject - xMid)).toBigDecimal()
         var angle = Math.toDegrees(acos((((distCenterMid * distCenterMid) + (distCenterObject * distCenterObject) - (distMidObject * distMidObject)) / (2.toBigDecimal() * distCenterMid * distCenterObject)).toDouble()))
         Log.i("INFO: ", "Angle with $angle degrees found.")
-        if(xObject < xMid){
+        if (xObject < xMid) {
             angle = 360 - angle
         }
         var displayLocal = ""

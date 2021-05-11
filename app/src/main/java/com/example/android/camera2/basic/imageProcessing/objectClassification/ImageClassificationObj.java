@@ -2,6 +2,7 @@ package com.example.android.camera2.basic.imageProcessing.objectClassification;
 
 import android.graphics.Bitmap;
 
+import com.example.android.camera2.basic.imageProcessing.depth.DepthInformationObj;
 import com.example.android.camera2.basic.imageProcessing.depth.DepthStatus;
 import com.google.api.services.vision.v1.model.AnnotateImageResponse;
 import com.google.api.services.vision.v1.model.LocalizedObjectAnnotation;

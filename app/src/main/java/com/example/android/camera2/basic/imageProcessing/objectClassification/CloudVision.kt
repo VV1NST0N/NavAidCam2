@@ -7,22 +7,25 @@ import com.example.android.camera2.basic.CameraActivity
 import com.example.android.camera2.basic.utils.helper.InitializerFactory
 import com.google.api.client.extensions.android.http.AndroidHttp
 import com.google.api.client.googleapis.json.GoogleJsonResponseException
+import com.google.api.client.googleapis.services.CommonGoogleClientRequestInitializer
 import com.google.api.client.json.JsonFactory
 import com.google.api.client.json.gson.GsonFactory
 import com.google.api.services.vision.v1.Vision
 import com.google.api.services.vision.v1.VisionRequestInitializer
 import com.google.api.services.vision.v1.model.*
 import com.google.cloud.translate.TranslateOptions
+import com.google.cloud.vision.v1.ImageAnnotatorClient
+import com.google.cloud.vision.v1.ImageAnnotatorClient.create
+import com.google.cloud.vision.v1.ImageAnnotatorSettings
 import java.io.ByteArrayOutputStream
 import java.io.IOException
 
 
 class CloudVision(image: Bitmap, PACKAGE_NAME: String, PACKAGE_MANAGER: PackageManager) {
 
-    private var CLOUD_VISION_API_KEY = "AIzaSyDfoRQ6HR6jCUwQT0_ef4Ls21OuIelEMAI"
+    private var CLOUD_VISION_API_KEY = "AIzaSyBEr8ixeKu6d4IIyhC3manvGk3PIjmzzbc"
     private lateinit var image: Bitmap
     private lateinit var mode: String
-    private lateinit var cameraActivity: CameraActivity
     private lateinit var PACKAGE_NAME: String
     private lateinit var PACKAGE_MANAGER: PackageManager
 
@@ -49,10 +52,10 @@ class CloudVision(image: Bitmap, PACKAGE_NAME: String, PACKAGE_MANAGER: PackageM
             Log.i("cloud", "first try completed")
             try {
                 val annotateRequest = visionRequest.images().annotate(batchAnnotateImagesRequest)
-                annotateRequest.disableGZipContent = true
+                annotateRequest.disableGZipContent = false
                 Log.d("CloudVision", "created Cloud Vision request object, sending request")
                 var response = annotateRequest.execute()
-                return convertResponseToString(response)
+                return response.responses
             } catch (e: GoogleJsonResponseException) {
                 Log.d("CloudVision", "failed to make API request because " + e.content)
             } catch (e: IOException) {
@@ -66,7 +69,9 @@ class CloudVision(image: Bitmap, PACKAGE_NAME: String, PACKAGE_MANAGER: PackageM
         return null
     }
 
+
     fun translateString(text: String): String? {
+
         try {
             Log.i("cloud", "Translation built")
             var translate: com.google.cloud.translate.Translate? = TranslateOptions.newBuilder().setApiKey(CLOUD_VISION_API_KEY).build().service
@@ -84,31 +89,8 @@ class CloudVision(image: Bitmap, PACKAGE_NAME: String, PACKAGE_MANAGER: PackageM
     }
 
 
-    private fun convertResponseToString(response: BatchAnnotateImagesResponse): MutableList<AnnotateImageResponse>? {
-        if (response.responses[0].isEmpty()) {
-            Log.i("cloud", "empty Response")
-            return null
-        }
-        Log.i("cloud", "fullResponse: $response")
-
-        if (mode == Constants.LABEL) {
-            if (response.responses[0].labelAnnotations[0].description == "Product" || response.responses[0].labelAnnotations[0].description == "product") {
-                return response.responses
-            }
-        } else if (mode == Constants.LOGO) {
-            Log.i("cloud", "Logo response: " + response.responses[0].logoAnnotations[0].description)
-            return response.responses
-        } else if (mode == Constants.LANDMARK) {
-            Log.i("cloud", "Landmark response: " + response.responses[0].landmarkAnnotations[0].description)
-            return response.responses
-        }
-        return response.responses
-    }
-
-
     fun addImageRequest(): AnnotateImageRequest {
         var test: Image
-
         var request: AnnotateImageRequest = AnnotateImageRequest()
         var base64EncodedImage: Image = Image()
         var byteArrayOutputStream = ByteArrayOutputStream()
